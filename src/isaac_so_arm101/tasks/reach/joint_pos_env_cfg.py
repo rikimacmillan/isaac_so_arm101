@@ -19,6 +19,7 @@ import isaaclab_tasks.manager_based.manipulation.reach.mdp as mdp
 from isaaclab.utils import configclass
 from isaac_so_arm101.robots import SO_ARM100_CFG, SO_ARM101_CFG  # noqa: F401
 from isaac_so_arm101.tasks.reach.reach_env_cfg import ReachEnvCfg
+from isaac_so_arm101.robots.pingti.pingti import PING_TI_CFG # included the pingti config
 
 ##
 # Scene definition
@@ -95,6 +96,45 @@ class SoArm101ReachEnvCfg(ReachEnvCfg):
 
 @configclass
 class SoArm101ReachEnvCfg_PLAY(SoArm101ReachEnvCfg):
+    def __post_init__(self):
+        # post init of parent
+        super().__post_init__()
+        # make a smaller scene for play
+        self.scene.num_envs = 50
+        self.scene.env_spacing = 2.5
+        # disable randomization for play
+        self.observations.policy.enable_corruption = False
+
+@configclass
+class PingTiReachEnvCfg(ReachEnvCfg):
+    def __post_init__(self):
+        # post init of parent
+        super().__post_init__()
+
+        # switch robot to franka
+        self.scene.robot = PING_TI_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        # override rewards
+        self.rewards.end_effector_position_tracking.params["asset_cfg"].body_names = ["moving_gripper_1"] # link name used for reward
+        self.rewards.end_effector_position_tracking_fine_grained.params["asset_cfg"].body_names = ["moving_gripper_1"]
+        self.rewards.end_effector_orientation_tracking.params["asset_cfg"].body_names = ["moving_gripper_1"]
+
+        self.rewards.end_effector_orientation_tracking.weight = 0.0
+
+        # override actions
+        self.actions.arm_action = mdp.JointPositionActionCfg(
+            asset_name="robot",
+            joint_names=[".*"], # maybe exclude the actual moving gripper for reaching tasks?
+            scale=0.5,
+            use_default_offset=True,
+        )
+        # override command generator body
+        # end-effector is along z-direction
+        self.commands.ee_pose.body_name = ["moving_gripper_1"]
+        # self.commands.ee_pose.ranges.pitch = (math.pi, math.pi)
+
+
+@configclass
+class PingTiReachEnvCfg_PLAY(PingTiReachEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()

@@ -44,7 +44,7 @@ def main():
     index = 0
     # acquire all Isaac environments names
     for task_spec in gym.registry.values():
-        if "SO-ARM" in task_spec.id:
+        if "SO-ARM" in task_spec.id or "PING-TI" in task_spec.id: # added PING-TI to the uv run list_envs command
             # add details to table
             table.add_row([index + 1, task_spec.id, task_spec.entry_point, task_spec.kwargs["env_cfg_entry_point"]])
             # increment count
