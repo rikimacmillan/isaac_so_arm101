@@ -10,6 +10,18 @@ TEMPLATE_ASSETS_DATA_DIR = Path(__file__).resolve().parent
 # Configuration
 ##
 
+# Motor specs reference:
+#   STS3215: stall torque = 2.94 Nm, no-load speed = 4.76 rad/s (1x)
+#   STS3250: stall torque = 4.90 Nm, no-load speed = 8.05 rad/s (1x)
+#
+# Joint -> motor mapping (from hardware):
+#   base_yaw      : 1x STS3215 -> effort=2.94,  velocity=4.76
+#   shoulder_pitch: 2x STS3250 -> effort=9.80,  velocity=8.05
+#   elbow_pitch   : 2x STS3215 -> effort=5.88,  velocity=4.76
+#   wrist_pitch   : 1x STS3215 -> effort=2.94,  velocity=4.76
+#   wrist_roll    : 1x STS3215 -> effort=2.94,  velocity=4.76  (continuous joint, no URDF limits)
+#   gripper_moving: 1x STS3215 -> effort=2.94,  velocity=4.76
+
 PING_TI_CFG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
         fix_base=True,
@@ -44,75 +56,55 @@ PING_TI_CFG = ArticulationCfg(
         joint_vel={".*": 0.0},
     ),
     actuators={
-        "arm": ImplicitActuatorCfg(
-            joint_names_expr=["shoulder_.*", "elbow_flex", "wrist_.*"],
-            effort_limit_sim=1.9,
-            velocity_limit_sim=1.5,
+        # 1x STS3215
+        "base": ImplicitActuatorCfg(
+            joint_names_expr=["base_yaw"],
+            effort_limit_sim=2.94,
+            velocity_limit_sim=4.76,
+            stiffness=200.0,
+            damping=80.0,
+        ),
+        # 2x STS3250 — higher torque and speed than STS3215
+        "shoulder": ImplicitActuatorCfg(
+            joint_names_expr=["shoulder_pitch"],
+            effort_limit_sim=9.80,
+            velocity_limit_sim=8.05,
+            stiffness=400.0,
+            damping=160.0,
+        ),
+        # 2x STS3215
+        "elbow": ImplicitActuatorCfg(
+            joint_names_expr=["elbow_pitch"],
+            effort_limit_sim=5.88,
+            velocity_limit_sim=4.76,
+            stiffness=240.0,
+            damping=90.0,
+        ),
+        # 1x STS3215 each — split stiffness/damping since wrist_roll bears less load
+        # Note: wrist_roll is a continuous joint in the URDF (no limits).
+        # Consider adding joint position limits in your env config to prevent
+        # unbounded spinning during training.
+        "wrist": ImplicitActuatorCfg(
+            joint_names_expr=["wrist_pitch", "wrist_roll"],
+            effort_limit_sim=2.94,
+            velocity_limit_sim=4.76,
             stiffness={
-                "shoulder_pan": 200.0,  # Highest - moves all mass
-                "shoulder_lift": 170.0,  # Slightly less than rotation
-                "elbow_flex": 120.0,  # Reduced based on less mass
-                "wrist_flex": 80.0,  # Reduced for less mass
-                "wrist_roll": 50.0,  # Low mass to move
+                "wrist_pitch": 80.0,
+                "wrist_roll":  50.0,
             },
             damping={
-                "shoulder_pan": 80.0,
-                "shoulder_lift": 65.0,
-                "elbow_flex": 45.0,
-                "wrist_flex": 30.0,
-                "wrist_roll": 20.0,
+                "wrist_pitch": 30.0,
+                "wrist_roll":  20.0,
             },
         ),
+        # 1x STS3215
         "gripper": ImplicitActuatorCfg(
-            joint_names_expr=["gripper"],
-            effort_limit_sim=2.5,  # Increased from 1.9 to 2.5 for stronger grip
-            velocity_limit_sim=1.5,
-            stiffness=60.0,  # Increased from 25.0 to 60.0 for more reliable closing
-            damping=20.0,  # Increased from 10.0 to 20.0 for stability
+            joint_names_expr=["gripper_moving"],
+            effort_limit_sim=2.94,
+            velocity_limit_sim=4.76,
+            stiffness=60.0,
+            damping=20.0,
         ),
     },
     soft_joint_pos_limit_factor=0.9,
-    
-        # "base": ImplicitActuatorCfg(
-        #     joint_names_expr=["base_yaw"],
-        #     effort_limit_sim=2.94,     # 1x ST3215
-        #     velocity_limit_sim=4.76,
-        #     stiffness=200.0,
-        #     damping=80.0,
-        # ),
-        # "shoulder": ImplicitActuatorCfg(
-        #     joint_names_expr=["shoulder_pitch"],
-        #     effort_limit_sim=9.80,     # 2x STS3250
-        #     velocity_limit_sim=8.05,
-        #     stiffness=400.0,
-        #     damping=160.0,
-        # ),
-        # "elbow": ImplicitActuatorCfg(
-        #     joint_names_expr=["elbow_pitch"],
-        #     effort_limit_sim=5.88,     # 2x ST3215
-        #     velocity_limit_sim=4.76,
-        #     stiffness=240.0,
-        #     damping=90.0,
-        # ),
-        # "wrist": ImplicitActuatorCfg(
-        #     joint_names_expr=["wrist_pitch", "wrist_roll"],
-        #     effort_limit_sim=2.94,     # 1x ST3215 per axis
-        #     velocity_limit_sim=4.76,
-        #     stiffness={
-        #         "wrist_pitch": 80.0,
-        #         "wrist_roll": 50.0,
-        #     },
-        #     damping={
-        #         "wrist_pitch": 30.0,
-        #         "wrist_roll": 20.0,
-        #     },
-        # ),
-        # "gripper": ImplicitActuatorCfg(
-        #     joint_names_expr=["gripper_moving"],
-        #     effort_limit_sim=2.94,     # 1x ST3215
-        #     velocity_limit_sim=4.76,
-        #     stiffness=60.0,
-        #     damping=20.0,
-        # ),
 )
-
