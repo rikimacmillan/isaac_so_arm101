@@ -160,6 +160,16 @@ class RewardsCfg:
         weight=-0.0001,
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
+    
+    # added this wrist flex reward
+    wrist_flex_tracking = RewTerm(
+        func=mdp.joint_pos_target_l2,
+        weight=-0.3,  # tune this relative to position reward
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["wrist_pitch"]),
+            "target": 1.5708,  # target angle in radians — set your desired angle here
+        },
+    )
 
 
 @configclass
