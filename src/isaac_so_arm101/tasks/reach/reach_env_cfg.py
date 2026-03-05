@@ -28,7 +28,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-import isaaclab.envs.mdp as core_mdp # added this to use joint_pos_target_l2
+from isaaclab_tasks.manager_based.classic.cartpole.mdp.rewards import joint_pos_target_l2 # added this to use joint_pos_target_l2
 
 
 ##
@@ -165,7 +165,7 @@ class RewardsCfg:
     
     # added this wrist flex reward
     wrist_flex_tracking = RewTerm(
-        func=core_mdp.joint_pos_target_l2,
+        func=joint_pos_target_l2,
         weight=-0.3,  # tune this relative to position reward
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=["wrist_pitch"]),
