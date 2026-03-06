@@ -37,9 +37,9 @@ PING_TI_CFG = ArticulationCfg(
             solver_position_iteration_count=8,
             solver_velocity_iteration_count=0,
         ),
-        # joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
-        #     gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
-        # ),
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
+        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         rot=(1.0, 0.0, 0.0, 0.0),
