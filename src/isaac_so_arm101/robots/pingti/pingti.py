@@ -48,7 +48,7 @@ PING_TI_CFG = ArticulationCfg(
             "base_yaw": 0.0,
             "shoulder_pitch": 0.0,
             "elbow_pitch": -0.0,
-            "wrist_pitch": 1.57,
+            "wrist_pitch": 0.0, # changed from 1.57 for testing so it doesn't conflict with reaching
             "wrist_roll": -0.0,
             "gripper_moving": 0.0,
         },

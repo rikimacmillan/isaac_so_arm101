@@ -128,7 +128,7 @@ class EventCfg:
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.5, 1.5),
+            "position_range": (0.5, 1.0), # reduced the upper bound from 1.5 to stay within limits
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -163,15 +163,16 @@ class RewardsCfg:
         params={"asset_cfg": SceneEntityCfg("robot")},
     )
     
-    # added this wrist flex reward
-    wrist_flex_tracking = RewTerm(
-        func=joint_pos_target_l2,
-        weight=-0.05,  # tune this relative to position reward. make sure this is less than end_effector_position_tracking, else the policy will learn to hold the wrist at 'target' while ignoring where the arm is in space.
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=["wrist_pitch"]),
-            "target": 1.5708,  # target angle in radians — set your desired angle here
-        },
-    )
+    # # added this wrist flex reward
+    # # Checking if removing the wrist flex tracking helps with movement.
+    # wrist_flex_tracking = RewTerm(
+    #     func=joint_pos_target_l2,
+    #     weight=-0.05,  # tune this relative to position reward. make sure this is less than end_effector_position_tracking, else the policy will learn to hold the wrist at 'target' while ignoring where the arm is in space.
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", joint_names=["wrist_pitch"]),
+    #         "target": 1.5708,  # target angle in radians — set your desired angle here
+    #     },
+    # )
 
 
 @configclass
