@@ -487,48 +487,54 @@
       </geometry>
     </collision>
   </link>
-  <joint name="elbow_pitch" type="revolute">
-    <origin rpy="0 0 0" xyz="0.026719 -0.030548 0.0"/>
+<!-- elbow_pitch: axis was (-0.980528, -0.196381, 0) = ~11.3 deg from -X around Z -->
+<joint name="elbow_pitch" type="revolute">
+    <origin rpy="0 0 0.19635" xyz="0.026719 -0.030548 0.0"/>
     <parent link="STS3215_elbow_pitch_1_1"/>
     <child link="elbow_link_1"/>
-    <axis xyz="-0.980528 -0.196381 0.0"/>
+    <axis xyz="-1 0 0"/>
     <limit effort="100" lower="-1.570796" upper="1.919862" velocity="100"/>
-  </joint>
+</joint>
   <joint name="elbow_wrist_servo_connect" type="fixed">
     <origin rpy="0 0 0" xyz="0.035734 -0.263819 0.002325"/>
     <parent link="elbow_link_1"/>
     <child link="STS3215_wrist_pitch_1"/>
   </joint>
-  <joint name="wrist_pitch" type="revolute">
-    <origin rpy="0 0 0" xyz="-0.03236 -0.031417 -0.00045"/>
+<!-- wrist_pitch: axis was (-0.980528, -0.196381, 0) -->
+<joint name="wrist_pitch" type="revolute">
+    <origin rpy="0 0 0.19635" xyz="-0.03236 -0.031417 -0.00045"/>
     <parent link="STS3215_wrist_pitch_1"/>
     <child link="wrist_link_1"/>
-    <axis xyz="-0.980528 -0.196381 -0.0"/>
+    <axis xyz="-1 0 0"/>
     <limit effort="100" lower="-1.919862" upper="1.919862" velocity="100"/>
-  </joint>
+</joint>
   <joint name="wrist_wrist_roll_connect" type="fixed">
     <origin rpy="0 0 0" xyz="0.022111 -0.018233 0.0"/>
     <parent link="wrist_link_1"/>
     <child link="STS3215_wrist_roll_1"/>
   </joint>
-  <joint name="wrist_roll" type="continuous">
-    <origin rpy="0 0 0" xyz="0.009168 -0.037428 0.00045"/>
+<!-- wrist_roll: axis was (0.196381, -0.980528, 0) = ~78.7 deg from X around Z -->
+<joint name="wrist_roll" type="revolute">
+    <origin rpy="0 0 -1.3744" xyz="0.009168 -0.037428 0.00045"/>
+    <!-- -1.3744 rad = -78.75 deg -->
     <parent link="STS3215_wrist_roll_1"/>
     <child link="gripper_mount_1"/>
-    <axis xyz="0.196381 -0.980528 -0.0"/>
-  </joint>
+    <axis xyz="1 0 0"/>
+    <limit effort="100" lower="-3.14159" upper="3.14159" velocity="100"/>
+</joint>
   <joint name="wrist_griper_mount_connect" type="fixed">
     <origin rpy="0 0 0" xyz="0.000593 -0.014568 -0.016889"/>
     <parent link="gripper_mount_1"/>
     <child link="STS3215_gripper_1"/>
   </joint>
-  <joint name="gripper_moving" type="revolute">
-    <origin rpy="0 0 0" xyz="0.019807 0.003967 0.0352"/>
+<!-- gripper_moving: axis was (-0.980528, -0.196381, 0) -->
+<joint name="gripper_moving" type="revolute">
+    <origin rpy="0 0 0.19635" xyz="0.019807 0.003967 0.0352"/>
     <parent link="STS3215_gripper_1"/>
     <child link="moving_gripper_1"/>
-    <axis xyz="-0.980528 -0.196381 -0.0"/>
+    <axis xyz="-1 0 0"/>
     <limit effort="100" lower="-0.20944" upper="1.570796" velocity="100"/>
-  </joint>
+</joint>
   <joint name="wrist_mount_connect" type="fixed">
     <origin rpy="0 0 0" xyz="-0.006431 -0.263595 0.002"/>
     <parent link="elbow_link_1"/>
@@ -556,13 +562,15 @@
     <parent link="base_yaw_link_1"/>
     <child link="STS3215_shoulder_pitch_2_1"/>
   </joint>
-  <joint name="shoulder_pitch" type="revolute">
-    <origin rpy="0 0 0" xyz="0.019718 0.004408 0.03475"/>
+<!-- shoulder_pitch: axis was (0.980528, 0.196381, 0) = ~11.3 deg from X around Z -->
+<joint name="shoulder_pitch" type="revolute">
+    <origin rpy="0 0 0.19635" xyz="0.019718 0.004408 0.03475"/>
+    <!-- 0.19635 rad = 11.25 deg compensates the diagonal axis -->
     <parent link="STS3215_shoulder_pitch_1_1"/>
     <child link="shoulder_link_1"/>
-    <axis xyz="0.980528 0.196381 -0.0"/>
+    <axis xyz="1 0 0"/>   <!-- now axis-aligned -->
     <limit effort="100" lower="-1.745329" upper="1.745329" velocity="100"/>
-  </joint>
+</joint>
   <joint name="shoulder_link_servo1_connect" type="fixed">
     <origin rpy="0 0 0" xyz="-0.020553 -0.000547 0.23165"/>
     <parent link="shoulder_link_1"/>
