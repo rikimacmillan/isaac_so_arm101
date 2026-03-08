@@ -128,27 +128,47 @@ class DebugOnPolicyRunner(OnPolicyRunner):
     Per-joint range    : watch wrist_roll especially. Range > 3.5 rad = runaway joint.
     Obs abs max        : should stay <10 with empirical_normalization. Above 50 =
                          normaliser is failing and the network sees huge inputs.
-    Value abs max      : early warning for crashes. 100-500 = yellow flag.
-                         Above 500 = inf/nan crash within ~50 iterations.
+    Value loss         : above 100 = WARNING. Above 1000 = crash imminent.
     Gradient norms     : should stay <=1.0 with max_grad_norm=1.0. Consistently
                          above 1.0 = gradient clipping is not taking effect.
     """
 
     def __init__(self, env, train_cfg, log_dir=None, device="cpu"):
         super().__init__(env, train_cfg, log_dir=log_dir, device=device)
-        # Per-step rollout buffers — populated inside learn(), read inside log()
         self._dbg_action_norms: list[float] = []
         self._dbg_action_delta_norms: list[float] = []
         self._dbg_joint_pos_mins: list[torch.Tensor] = []
         self._dbg_joint_pos_maxs: list[torch.Tensor] = []
         self._dbg_prev_actions: torch.Tensor | None = None
 
+    @staticmethod
+    def _obs_to_tensor(obs) -> torch.Tensor | None:
+        """Extract a plain float tensor from obs regardless of whether it is a
+        TensorDict (RSL-RL 3.x + Isaac Lab) or a plain Tensor (older versions).
+
+        Returns None if extraction fails so callers can skip gracefully.
+        """
+        # Plain tensor — already what we need
+        if isinstance(obs, torch.Tensor):
+            return obs
+        # TensorDict — concatenate all leaves in insertion order
+        try:
+            # Prefer the 'policy' key if present (matches obs_group name)
+            if hasattr(obs, "get") and obs.get("policy") is not None:
+                return obs["policy"]
+            # Fall back: concatenate every value along the last dim
+            tensors = [v for v in obs.values() if isinstance(v, torch.Tensor)]
+            if tensors:
+                return torch.cat(tensors, dim=-1)
+        except Exception:
+            pass
+        return None
+
     # ------------------------------------------------------------------
-    # Override learn() to inject per-step tracking into the rollout loop.
-    # Everything outside the inner loop is identical to the RSL-RL source.
+    # Override learn() — identical to RSL-RL source with debug lines added
+    # inside the rollout loop.  Marked with  # ---- DEBUG ----  comments.
     # ------------------------------------------------------------------
     def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False):  # noqa: C901
-        # initialize writer
         self._prepare_logging_writer()
 
         if init_at_random_ep_len:
@@ -181,7 +201,7 @@ class DebugOnPolicyRunner(OnPolicyRunner):
         for it in range(start_iter, tot_iter):
             start = time.time()
 
-            # ---- DEBUG: clear per-iteration rollout buffers ----
+            # ---- DEBUG: reset per-iteration rollout buffers ----
             self._dbg_action_norms.clear()
             self._dbg_action_delta_norms.clear()
             self._dbg_joint_pos_mins.clear()
@@ -197,20 +217,24 @@ class DebugOnPolicyRunner(OnPolicyRunner):
                     self.alg.process_env_step(obs, rewards, dones, extras)
                     intrinsic_rewards = self.alg.intrinsic_rewards if self.alg.rnd else None
 
-                    # ---- DEBUG: track per-step action & joint stats ----
+                    # ---- DEBUG: per-step tracking ----
+                    # actions is always a plain tensor
                     self._dbg_action_norms.append(actions.norm(dim=-1).mean().item())
                     if self._dbg_prev_actions is not None:
                         delta = (actions - self._dbg_prev_actions).norm(dim=-1)
                         self._dbg_action_delta_norms.append(delta.mean().item())
                     self._dbg_prev_actions = actions.clone()
-                    # joint_pos is the first ObsTerm — first 6 dims.
-                    # Order: base_yaw, shoulder_pitch, elbow_pitch,
-                    #        wrist_pitch, wrist_roll, gripper_moving
-                    # Adjust slice if your obs order differs.
-                    jp = obs[:, :6]
-                    self._dbg_joint_pos_mins.append(jp.min(dim=0).values.detach())
-                    self._dbg_joint_pos_maxs.append(jp.max(dim=0).values.detach())
-                    # ----------------------------------------------------
+
+                    # obs may be a TensorDict — extract policy tensor for joint tracking
+                    obs_t = self._obs_to_tensor(obs)
+                    if obs_t is not None:
+                        # first 6 dims = joint_pos:
+                        # base_yaw, shoulder_pitch, elbow_pitch,
+                        # wrist_pitch, wrist_roll, gripper_moving
+                        jp = obs_t[:, :6]
+                        self._dbg_joint_pos_mins.append(jp.min(dim=0).values.detach())
+                        self._dbg_joint_pos_maxs.append(jp.max(dim=0).values.detach())
+                    # ----------------------------------
 
                     if self.log_dir is not None:
                         if "episode" in extras:
@@ -263,17 +287,15 @@ class DebugOnPolicyRunner(OnPolicyRunner):
             self.save(os.path.join(self.log_dir, f"model_{self.current_learning_iteration}.pt"))
 
     # ------------------------------------------------------------------
-    # Override log() to append debug diagnostics after the standard output.
-    # Uses the correct locs keys from the RSL-RL 3.x learn() locals().
+    # Override log() to append debug block after the standard RSL-RL output.
     # ------------------------------------------------------------------
     def log(self, locs: dict, width: int = 80, pad: int = 35):
-        # Run the parent log first so all standard RSL-RL output is preserved
         super().log(locs, width=width, pad=pad)
 
         it      = locs.get("it", 0)
-        # last-step obs and actions are in locs (from the rollout loop locals)
-        obs     = locs.get("obs")      # (num_envs, obs_dim) — last rollout step
-        actions = locs.get("actions")  # (num_envs, act_dim) — last rollout step
+        # Extract plain tensor from obs TensorDict for stats
+        obs_t   = self._obs_to_tensor(locs.get("obs"))
+        actions = locs.get("actions")  # always a plain tensor
 
         sep = "=" * width
         print(f"\n{sep}")
@@ -289,14 +311,14 @@ class DebugOnPolicyRunner(OnPolicyRunner):
         else:
             print(f"  {'Action norm':.<{pad}} (no data)")
 
-        # 2. Action delta norm (step-to-step change — drives action_rate explosion)
+        # 2. Action delta norm — step-to-step change drives action_rate explosion
         if self._dbg_action_delta_norms:
             a = np.array(self._dbg_action_delta_norms)
             w = "  <-- HIGH, action_rate will explode" if a.max() > 3.0 else ""
             print(f"  {'Action delta norm (step-to-step)':.<{pad}} "
                   f"mean={a.mean():.4f}  max={a.max():.4f}  min={a.min():.4f}{w}")
 
-        # 3. Per-joint position range across the entire rollout
+        # 3. Per-joint position range across entire rollout
         if self._dbg_joint_pos_mins:
             jmin = torch.stack(self._dbg_joint_pos_mins).min(dim=0).values
             jmax = torch.stack(self._dbg_joint_pos_maxs).max(dim=0).values
@@ -310,16 +332,18 @@ class DebugOnPolicyRunner(OnPolicyRunner):
                 rng = hi - lo
                 w = "  *** RUNAWAY ***" if rng > 3.5 else ("  * wide *" if rng > 2.0 else "")
                 print(f"    {name:.<22} [{lo:+.3f}, {hi:+.3f}]  range={rng:.3f}{w}")
+        else:
+            print(f"\n  Per-joint range: (no data — obs_to_tensor failed)")
 
         # 4. Last-step observation stats
-        if obs is not None:
-            omax  = obs.abs().max().item()
-            nan_n = int(torch.isnan(obs).sum())
-            inf_n = int(torch.isinf(obs).sum())
+        if obs_t is not None:
+            omax  = obs_t.abs().max().item()
+            nan_n = int(torch.isnan(obs_t).sum())
+            inf_n = int(torch.isinf(obs_t).sum())
             w = "  <-- HIGH, normaliser may be failing" if omax > 50 else ""
             print(f"\n  Last-step observation stats:")
-            print(f"    {'mean':.<{pad}} {obs.mean().item():+.4f}")
-            print(f"    {'std':.<{pad}} {obs.std().item():.4f}")
+            print(f"    {'mean':.<{pad}} {obs_t.mean().item():+.4f}")
+            print(f"    {'std':.<{pad}} {obs_t.std().item():.4f}")
             print(f"    {'abs max':.<{pad}} {omax:.4f}{w}")
             if nan_n: print(f"    *** {nan_n} NaN values in observations! ***")
             if inf_n: print(f"    *** {inf_n} Inf values in observations! ***")
@@ -333,22 +357,21 @@ class DebugOnPolicyRunner(OnPolicyRunner):
             print(f"    {'norm max':.<{pad}} {anorm.max().item():.4f}{w}")
             print(f"    {'std':.<{pad}} {actions.std().item():.4f}")
 
-        # 6. Loss dict — value_function_loss is the key crash indicator
+        # 6. Loss dict — value_function loss is primary crash indicator
         loss_dict = locs.get("loss_dict", {})
         if loss_dict:
             print(f"\n  Loss values:")
             for k, v in loss_dict.items():
                 vf = float(v)
                 w = ""
-                if "value" in k and vf > 100:  w = "  <-- WARNING, diverging"
-                if "value" in k and vf > 1000: w = "  <-- CRITICAL, crash imminent"
-                if not np.isfinite(vf):         w = "  *** INF/NAN — crash this iter ***"
+                if "value" in k and vf > 100:   w = "  <-- WARNING, diverging"
+                if "value" in k and vf > 1000:  w = "  <-- CRITICAL, crash imminent"
+                if not np.isfinite(vf):          w = "  *** INF/NAN — crash this iter ***"
                 print(f"    {k:.<{pad}} {vf:.6f}{w}")
 
-        # 7. Gradient norms — self.alg.policy is the ActorCritic module in RSL-RL 3.x
+        # 7. Gradient norms — self.alg.policy is the ActorCritic in RSL-RL 3.x
         policy = getattr(self.alg, "policy", None)
         if policy is not None:
-            # Try to get actor and critic sub-modules separately for finer resolution
             actor_mod  = getattr(policy, "actor",  None)
             critic_mod = getattr(policy, "critic", None)
             print(f"\n  Gradient norms (after PPO update):")
@@ -361,16 +384,12 @@ class DebugOnPolicyRunner(OnPolicyRunner):
                 cw = "  <-- HIGH, value explosion risk" if cg > 1.0 else ""
                 print(f"    {'critic':.<{pad}} {cg:.4f}{cw}")
             if not isinstance(actor_mod, torch.nn.Module) and not isinstance(critic_mod, torch.nn.Module):
-                # Fall back to whole policy norm
                 pg = self._grad_norm(policy)
-                pw = "  <-- HIGH" if pg > 1.0 else ""
-                print(f"    {'policy (combined)':.<{pad}} {pg:.4f}{pw}")
-        else:
-            print(f"\n  Gradient norms: (self.alg.policy not found)")
+                print(f"    {'policy (combined)':.<{pad}} {pg:.4f}{'  <-- HIGH' if pg > 1.0 else ''}")
 
         print(sep + "\n")
 
-        # 8. Mirror to TensorBoard under Debug/
+        # 8. TensorBoard
         writer = getattr(self, "writer", None)
         if writer is not None:
             if self._dbg_action_norms:
@@ -379,14 +398,14 @@ class DebugOnPolicyRunner(OnPolicyRunner):
             if self._dbg_action_delta_norms:
                 writer.add_scalar("Debug/action_delta_mean", float(np.mean(self._dbg_action_delta_norms)), it)
                 writer.add_scalar("Debug/action_delta_max",  float(np.max(self._dbg_action_delta_norms)),  it)
-            if obs is not None:
-                writer.add_scalar("Debug/obs_abs_max", obs.abs().max().item(), it)
-                writer.add_scalar("Debug/obs_std",     obs.std().item(),       it)
+            if obs_t is not None:
+                writer.add_scalar("Debug/obs_abs_max", obs_t.abs().max().item(), it)
+                writer.add_scalar("Debug/obs_std",     obs_t.std().item(),       it)
             policy = getattr(self.alg, "policy", None)
             if policy is not None:
                 actor_mod  = getattr(policy, "actor",  None)
                 critic_mod = getattr(policy, "critic", None)
-                if isinstance(actor_mod, torch.nn.Module):
+                if isinstance(actor_mod,  torch.nn.Module):
                     writer.add_scalar("Debug/actor_grad_norm",  self._grad_norm(actor_mod),  it)
                 if isinstance(critic_mod, torch.nn.Module):
                     writer.add_scalar("Debug/critic_grad_norm", self._grad_norm(critic_mod), it)
