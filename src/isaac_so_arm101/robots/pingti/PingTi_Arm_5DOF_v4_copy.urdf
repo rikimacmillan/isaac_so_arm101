@@ -368,11 +368,12 @@
   <child link="STS3215_wrist_roll_1"/>
 </joint>
 
-<joint name="wrist_roll" type="continuous">
+<joint name="wrist_roll" type="revolute">
   <origin xyz="0.00164 -0.0385 0.00045" rpy="0 0 0"/>
   <parent link="STS3215_wrist_roll_1"/>
   <child link="gripper_mount_1"/>
   <axis xyz="0.0 -1.0 -0.0"/>
+  <limit lower="-3.14159" upper="3.14159" effort="100" velocity="100"/>
 </joint>
 
 <joint name="wrist_griper_mount_connect" type="fixed">
