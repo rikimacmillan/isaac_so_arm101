@@ -40,6 +40,7 @@ PING_TI_CFG = ArticulationCfg(
         # joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
         #     gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
         # ),
+        joint_drive=None, # replace this with the above commented out block if conversion issue isn't fixed
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         rot=(1.0, 0.0, 0.0, 0.0),
