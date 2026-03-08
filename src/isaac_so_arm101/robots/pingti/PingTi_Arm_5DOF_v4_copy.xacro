@@ -1,0 +1,444 @@
+<?xml version="1.0" ?>
+<robot name="PingTi_Arm_5DOF_v4_copy" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<xacro:include filename="$(find PingTi_Arm_5DOF_v4_copy_description)/urdf/materials.xacro" />
+<xacro:include filename="$(find PingTi_Arm_5DOF_v4_copy_description)/urdf/PingTi_Arm_5DOF_v4_copy.trans" />
+<xacro:include filename="$(find PingTi_Arm_5DOF_v4_copy_description)/urdf/PingTi_Arm_5DOF_v4_copy.gazebo" />
+<link name="base_link">
+  <inertial>
+    <origin xyz="-3.294222799751554e-06 0.8236699206879414 0.07022225351061052" rpy="0 0 0"/>
+    <mass value="1.1606702094747876"/>
+    <inertia ixx="0.001182" iyy="0.001221" izz="0.001296" ixy="-0.0" iyz="-0.000216" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="elbow_link_1">
+  <inertial>
+    <origin xyz="-0.03226838925461216 -0.12833817907324507 -0.0007166743734490777" rpy="0 0 0"/>
+    <mass value="1.3198480613227268"/>
+    <inertia ixx="0.009627" iyy="0.000869" izz="0.010402" ixy="-0.000472" iyz="-4.8e-05" ixz="-2e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.04035 -0.73013 -0.397948" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/elbow_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.04035 -0.73013 -0.397948" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/elbow_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="STS3215_wrist_pitch_1">
+  <inertial>
+    <origin xyz="-0.017826879672448774 -0.012098807908752285 -3.210009195120378e-07" rpy="0 0 0"/>
+    <mass value="0.2843033831904074"/>
+    <inertia ixx="6.2e-05" iyy="4e-05" izz="7.3e-05" ixy="-1e-06" iyz="-0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.024329 -0.46443 -0.400273" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_wrist_pitch_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.024329 -0.46443 -0.400273" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_wrist_pitch_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="wrist_link_1">
+  <inertial>
+    <origin xyz="0.015355318917251514 -0.026091094070632037 -5.328250413333402e-05" rpy="0 0 0"/>
+    <mass value="0.22921407551598705"/>
+    <inertia ixx="0.00011" iyy="0.000122" izz="0.000191" ixy="-5e-06" iyz="0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.013571 -0.43998 -0.399823" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/wrist_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.013571 -0.43998 -0.399823" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/wrist_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="STS3215_wrist_roll_1">
+  <inertial>
+    <origin xyz="-0.01280078718457152 -0.018427300739866648 -3.210009227871957e-07" rpy="0 0 0"/>
+    <mass value="0.2843033831904074"/>
+    <inertia ixx="4e-05" iyy="6.2e-05" izz="7.3e-05" ixy="1e-06" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.004529 -0.41776 -0.399823" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_wrist_roll_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.004529 -0.41776 -0.399823" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_wrist_roll_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="gripper_mount_1">
+  <inertial>
+    <origin xyz="-0.015652773080729022 -0.020306011945926294 0.0013358914036544767" rpy="0 0 0"/>
+    <mass value="0.44698022927880193"/>
+    <inertia ixx="0.000301" iyy="0.000166" izz="0.000333" ixy="-5.6e-05" iyz="1e-06" ixz="4e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.006169 -0.37926 -0.400273" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/gripper_mount_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.006169 -0.37926 -0.400273" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/gripper_mount_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="STS3215_gripper_1">
+  <inertial>
+    <origin xyz="0.02239948142715992 -2.358219026166175e-07 -0.00012730969740099018" rpy="0 0 0"/>
+    <mass value="0.2843033831904074"/>
+    <inertia ixx="4e-05" iyy="7.3e-05" izz="6.2e-05" ixy="-0.0" iyz="0.0" ixz="1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.010721 -0.36486 -0.402552" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_gripper_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.010721 -0.36486 -0.402552" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_gripper_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="moving_gripper_1">
+  <inertial>
+    <origin xyz="-0.0004999008270242869 -0.029253452456021067 0.020784075387621836" rpy="0 0 0"/>
+    <mass value="0.1586808414280307"/>
+    <inertia ixx="8.7e-05" iyy="2.4e-05" izz="7e-05" ixy="-4e-06" iyz="-2e-06" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.024479 -0.36486 -0.382352" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/moving_gripper_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.024479 -0.36486 -0.382352" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/moving_gripper_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="wrist_mount_link_1">
+  <inertial>
+    <origin xyz="0.023150392016893624 -5.799018346303031e-05 0.0018439102205746183" rpy="0 0 0"/>
+    <mass value="0.10853073755546008"/>
+    <inertia ixx="2.7e-05" iyy="5.8e-05" izz="4.6e-05" ixy="0.0" iyz="0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.017721 -0.47293 -0.399948" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/wrist_mount_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.017721 -0.47293 -0.399948" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/wrist_mount_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="STS3215_base_yaw_1">
+  <inertial>
+    <origin xyz="6.7522991337791345e-12 0.023001006764512555 0.00012699691993646456" rpy="0 0 0"/>
+    <mass value="0.2843033831904074"/>
+    <inertia ixx="7.3e-05" iyy="4e-05" izz="6.2e-05" ixy="-0.0" iyz="1e-06" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.0 -0.78468 -0.092798" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_base_yaw_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.0 -0.78468 -0.092798" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_base_yaw_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="base_yaw_link_1">
+  <inertial>
+    <origin xyz="-4.0736267994722074e-05 -0.03387363045696723 0.03628992437564034" rpy="0 0 0"/>
+    <mass value="0.8041215139582379"/>
+    <inertia ixx="0.000597" iyy="0.000639" izz="0.00036" ixy="1e-06" iyz="4e-05" ixz="-1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.0 -0.79488 -0.074498" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/base_yaw_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.0 -0.79488 -0.074498" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/base_yaw_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="STS3215_shoulder_pitch_1_1">
+  <inertial>
+    <origin xyz="0.0001270649247201404 3.432095774247301e-08 0.022398959558416753" rpy="0 0 0"/>
+    <mass value="0.2843033831904074"/>
+    <inertia ixx="6.2e-05" iyy="7.3e-05" izz="4e-05" ixy="-0.0" iyz="-0.0" ixz="-1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.020911 -0.76183 -0.131098" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_shoulder_pitch_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.020911 -0.76183 -0.131098" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_shoulder_pitch_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="STS3215_shoulder_pitch_2_1">
+  <inertial>
+    <origin xyz="-0.00012706492472672193 3.433446782441507e-08 0.022398959558416948" rpy="0 0 0"/>
+    <mass value="0.2843033831904074"/>
+    <inertia ixx="6.2e-05" iyy="7.3e-05" izz="4e-05" ixy="-0.0" iyz="0.0" ixz="1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.020911 -0.76183 -0.131098" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_shoulder_pitch_2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.020911 -0.76183 -0.131098" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_shoulder_pitch_2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="shoulder_link_1">
+  <inertial>
+    <origin xyz="0.04062814504148921 1.31958667685117e-05 0.1162721580980865" rpy="0 0 0"/>
+    <mass value="1.874822082154528"/>
+    <inertia ixx="0.010771" iyy="0.012498" izz="0.001858" ixy="2e-06" iyz="-7.2e-05" ixz="-1.2e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.041111 -0.76183 -0.166298" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/shoulder_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.041111 -0.76183 -0.166298" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/shoulder_link_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="STS3215_elbow_pitch_2_1">
+  <inertial>
+    <origin xyz="-0.0001270652075187756 -0.022398993235538067 -3.2052973703011745e-07" rpy="0 0 0"/>
+    <mass value="0.2843033831904074"/>
+    <inertia ixx="6.2e-05" iyy="4e-05" izz="7.3e-05" ixy="-1e-06" iyz="-0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.020972 -0.76533 -0.397948" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_elbow_pitch_2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0.020972 -0.76533 -0.397948" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_elbow_pitch_2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="STS3215_elbow_pitch_1_1">
+  <inertial>
+    <origin xyz="0.00012706464192491218 -0.022398993235538178 -3.205432422270782e-07" rpy="0 0 0"/>
+    <mass value="0.2843033831904074"/>
+    <inertia ixx="6.2e-05" iyy="4e-05" izz="7.3e-05" ixy="1e-06" iyz="0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.02015 -0.76533 -0.397948" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_elbow_pitch_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.02015 -0.76533 -0.397948" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="/home/cirp-lab/moore/prefab_robots/PingTi_Arm_v3/PingTi_Arm_5DOF_v4_copy_description/meshes/STS3215_elbow_pitch_1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<joint name="elbow_pitch" type="revolute">
+  <origin xyz="0.0202 -0.0352 0.0" rpy="0 0 0"/>
+  <parent link="STS3215_elbow_pitch_1_1"/>
+  <child link="elbow_link_1"/>
+  <axis xyz="-1.0 0.0 -0.0"/>
+  <limit upper="1.919862" lower="-1.570796" effort="100" velocity="100"/>
+</joint>
+
+<joint name="elbow_wrist_servo_connect" type="fixed">
+  <origin xyz="-0.016021 -0.2657 0.002325" rpy="0 0 0"/>
+  <parent link="elbow_link_1"/>
+  <child link="STS3215_wrist_pitch_1"/>
+</joint>
+
+<joint name="wrist_pitch" type="revolute">
+  <origin xyz="-0.0379 -0.02445 -0.00045" rpy="0 0 0"/>
+  <parent link="STS3215_wrist_pitch_1"/>
+  <child link="wrist_link_1"/>
+  <axis xyz="-1.0 0.0 0.0"/>
+  <limit upper="1.919862" lower="-1.919862" effort="100" velocity="100"/>
+</joint>
+
+<joint name="wrist_wrist_roll_connect" type="fixed">
+  <origin xyz="0.0181 -0.02222 0.0" rpy="0 0 0"/>
+  <parent link="wrist_link_1"/>
+  <child link="STS3215_wrist_roll_1"/>
+</joint>
+
+<joint name="wrist_roll" type="continuous">
+  <origin xyz="0.00164 -0.0385 0.00045" rpy="0 0 0"/>
+  <parent link="STS3215_wrist_roll_1"/>
+  <child link="gripper_mount_1"/>
+  <axis xyz="0.0 -1.0 -0.0"/>
+</joint>
+
+<joint name="wrist_griper_mount_connect" type="fixed">
+  <origin xyz="-0.01689 -0.0144 0.002279" rpy="0 0 0"/>
+  <parent link="gripper_mount_1"/>
+  <child link="STS3215_gripper_1"/>
+</joint>
+
+<joint name="gripper_moving" type="revolute">
+  <origin xyz="0.0352 0.0 -0.0202" rpy="0 0 0"/>
+  <parent link="STS3215_gripper_1"/>
+  <child link="moving_gripper_1"/>
+  <axis xyz="0.0 -0.0 1.0"/>
+  <limit upper="1.570796" lower="-0.20944" effort="100" velocity="100"/>
+</joint>
+
+<joint name="wrist_mount_connect" type="fixed">
+  <origin xyz="-0.058071 -0.2572 0.002" rpy="0 0 0"/>
+  <parent link="elbow_link_1"/>
+  <child link="wrist_mount_link_1"/>
+</joint>
+
+<joint name="base_link_mount_connect" type="fixed">
+  <origin xyz="0.0 0.78468 0.092798" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="STS3215_base_yaw_1"/>
+</joint>
+
+<joint name="base_yaw" type="revolute">
+  <origin xyz="0.0 0.0102 -0.0183" rpy="0 0 0"/>
+  <parent link="STS3215_base_yaw_1"/>
+  <child link="base_yaw_link_1"/>
+  <axis xyz="0.0 0.0 -1.0"/>
+  <limit upper="1.919862" lower="-1.919862" effort="100" velocity="100"/>
+</joint>
+
+<joint name="base_yaw_link_servo_1_connect" type="fixed">
+  <origin xyz="0.020911 -0.03305 0.0566" rpy="0 0 0"/>
+  <parent link="base_yaw_link_1"/>
+  <child link="STS3215_shoulder_pitch_1_1"/>
+</joint>
+
+<joint name="base_yaw_link_servo_2_connect" type="fixed">
+  <origin xyz="-0.020911 -0.03305 0.0566" rpy="0 0 0"/>
+  <parent link="base_yaw_link_1"/>
+  <child link="STS3215_shoulder_pitch_2_1"/>
+</joint>
+
+<joint name="shoulder_pitch" type="revolute">
+  <origin xyz="-0.0202 0.0 0.0352" rpy="0 0 0"/>
+  <parent link="STS3215_shoulder_pitch_2_1"/>
+  <child link="shoulder_link_1"/>
+  <axis xyz="1.0 -0.0 0.0"/>
+  <limit upper="1.745329" lower="-1.919862" effort="100" velocity="100"/>
+</joint>
+
+<joint name="Rigid 24" type="fixed">
+  <origin xyz="0.020139 0.0035 0.23165" rpy="0 0 0"/>
+  <parent link="shoulder_link_1"/>
+  <child link="STS3215_elbow_pitch_2_1"/>
+</joint>
+
+<joint name="Rigid 25" type="fixed">
+  <origin xyz="0.061261 0.0035 0.23165" rpy="0 0 0"/>
+  <parent link="shoulder_link_1"/>
+  <child link="STS3215_elbow_pitch_1_1"/>
+</joint>
+
+</robot>
