@@ -74,12 +74,16 @@ if version.parse(installed_version) < version.parse(RSL_RL_VERSION):
 
 import gymnasium as gym
 import os
+import time
+import statistics
 import torch
 import numpy as np
+from collections import deque
 from datetime import datetime
 
 import omni
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
+from rsl_rl.utils import store_code_state
 
 from isaaclab.envs import (
     DirectMARLEnv,
@@ -132,137 +136,170 @@ class DebugOnPolicyRunner(OnPolicyRunner):
 
     def __init__(self, env, train_cfg, log_dir=None, device="cpu"):
         super().__init__(env, train_cfg, log_dir=log_dir, device=device)
-        self._prev_actions: torch.Tensor | None = None
-        self._action_norms: list[float] = []
-        self._action_delta_norms: list[float] = []
-        self._joint_pos_mins: list[torch.Tensor] = []
-        self._joint_pos_maxs: list[torch.Tensor] = []
+        # Per-step rollout buffers — populated inside learn(), read inside log()
+        self._dbg_action_norms: list[float] = []
+        self._dbg_action_delta_norms: list[float] = []
+        self._dbg_joint_pos_mins: list[torch.Tensor] = []
+        self._dbg_joint_pos_maxs: list[torch.Tensor] = []
+        self._dbg_prev_actions: torch.Tensor | None = None
 
     # ------------------------------------------------------------------
-    # Helper: find actor/critic regardless of RSL-RL version.
-    #
-    # RSL-RL 2.x: self.alg.actor_critic  (combined module with .actor / .critic)
-    # RSL-RL 3.x: self.alg.actor  and  self.alg.critic  (separate modules)
+    # Override learn() to inject per-step tracking into the rollout loop.
+    # Everything outside the inner loop is identical to the RSL-RL source.
     # ------------------------------------------------------------------
-    def _get_actor_critic(self) -> tuple[torch.nn.Module | None, torch.nn.Module | None]:
-        alg = self.alg
+    def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False):  # noqa: C901
+        # initialize writer
+        self._prepare_logging_writer()
 
-        # RSL-RL 3.x path — separate attributes on PPO
-        actor  = getattr(alg, "actor",  None)
-        critic = getattr(alg, "critic", None)
-        if isinstance(actor, torch.nn.Module) and isinstance(critic, torch.nn.Module):
-            return actor, critic
+        if init_at_random_ep_len:
+            self.env.episode_length_buf = torch.randint_like(
+                self.env.episode_length_buf, high=int(self.env.max_episode_length)
+            )
 
-        # RSL-RL 2.x path — combined actor_critic with sub-modules
-        ac = getattr(alg, "actor_critic", None)
-        if isinstance(ac, torch.nn.Module):
-            a = getattr(ac, "actor",  ac)   # fall back to whole module if no sub-attr
-            c = getattr(ac, "critic", ac)
-            return a, c
+        obs = self.env.get_observations().to(self.device)
+        self.train_mode()
 
-        # Unknown layout — log a one-time warning and skip grad norms
-        if not getattr(self, "_grad_warn_shown", False):
-            print("[DEBUG] Warning: could not locate actor/critic modules on self.alg.")
-            print(f"[DEBUG] self.alg attributes: {[k for k in dir(alg) if not k.startswith('_')]}")
-            self._grad_warn_shown = True
-        return None, None
+        ep_infos = []
+        rewbuffer = deque(maxlen=100)
+        lenbuffer = deque(maxlen=100)
+        cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+        cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
 
-    @staticmethod
-    def _grad_norm(module: torch.nn.Module | None) -> float:
-        if module is None:
-            return float("nan")
-        total = 0.0
-        for p in module.parameters():
-            if p.grad is not None:
-                total += p.grad.data.norm(2).item() ** 2
-        return total ** 0.5
+        if self.alg.rnd:
+            erewbuffer = deque(maxlen=100)
+            irewbuffer = deque(maxlen=100)
+            cur_ereward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+            cur_ireward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
 
-    # ------------------------------------------------------------------
-    # Override collect_rollouts to record per-step diagnostics.
-    # RSL-RL 3.x calls this from learn(); if the method name ever changes
-    # the per-step buffers will just be empty and the log will say so.
-    # ------------------------------------------------------------------
-    def collect_rollouts(self):
-        self._action_norms.clear()
-        self._action_delta_norms.clear()
-        self._joint_pos_mins.clear()
-        self._joint_pos_maxs.clear()
-        self._prev_actions = None
+        if self.is_distributed:
+            print(f"Synchronizing parameters for rank {self.gpu_global_rank}...")
+            self.alg.broadcast_parameters()
 
-        obs, _ = self.env.get_observations()
-        self.alg.actor_critic.eval() if hasattr(self.alg, "actor_critic") else None
+        start_iter = self.current_learning_iteration
+        tot_iter = start_iter + num_learning_iterations
 
-        actor, _ = self._get_actor_critic()
-        policy = getattr(self.alg, "actor_critic", None) or actor
-        if policy is not None:
-            policy.eval()
+        for it in range(start_iter, tot_iter):
+            start = time.time()
 
-        for _ in range(self.num_steps_per_env):
+            # ---- DEBUG: clear per-iteration rollout buffers ----
+            self._dbg_action_norms.clear()
+            self._dbg_action_delta_norms.clear()
+            self._dbg_joint_pos_mins.clear()
+            self._dbg_joint_pos_maxs.clear()
+            self._dbg_prev_actions = None
+            # ----------------------------------------------------
+
             with torch.inference_mode():
-                actions = self.alg.act(obs)
+                for _ in range(self.num_steps_per_env):
+                    actions = self.alg.act(obs)
+                    obs, rewards, dones, extras = self.env.step(actions.to(self.env.device))
+                    obs, rewards, dones = (obs.to(self.device), rewards.to(self.device), dones.to(self.device))
+                    self.alg.process_env_step(obs, rewards, dones, extras)
+                    intrinsic_rewards = self.alg.intrinsic_rewards if self.alg.rnd else None
 
-            # mean action norm across all envs this step
-            self._action_norms.append(actions.norm(dim=-1).mean().item())
+                    # ---- DEBUG: track per-step action & joint stats ----
+                    self._dbg_action_norms.append(actions.norm(dim=-1).mean().item())
+                    if self._dbg_prev_actions is not None:
+                        delta = (actions - self._dbg_prev_actions).norm(dim=-1)
+                        self._dbg_action_delta_norms.append(delta.mean().item())
+                    self._dbg_prev_actions = actions.clone()
+                    # joint_pos is the first ObsTerm — first 6 dims.
+                    # Order: base_yaw, shoulder_pitch, elbow_pitch,
+                    #        wrist_pitch, wrist_roll, gripper_moving
+                    # Adjust slice if your obs order differs.
+                    jp = obs[:, :6]
+                    self._dbg_joint_pos_mins.append(jp.min(dim=0).values.detach())
+                    self._dbg_joint_pos_maxs.append(jp.max(dim=0).values.detach())
+                    # ----------------------------------------------------
 
-            # how much actions change between consecutive steps
-            if self._prev_actions is not None:
-                delta = (actions - self._prev_actions).norm(dim=-1)
-                self._action_delta_norms.append(delta.mean().item())
-            self._prev_actions = actions.clone()
+                    if self.log_dir is not None:
+                        if "episode" in extras:
+                            ep_infos.append(extras["episode"])
+                        elif "log" in extras:
+                            ep_infos.append(extras["log"])
+                        if self.alg.rnd:
+                            cur_ereward_sum += rewards
+                            cur_ireward_sum += intrinsic_rewards
+                            cur_reward_sum += rewards + intrinsic_rewards
+                        else:
+                            cur_reward_sum += rewards
+                        cur_episode_length += 1
+                        new_ids = (dones > 0).nonzero(as_tuple=False)
+                        rewbuffer.extend(cur_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                        lenbuffer.extend(cur_episode_length[new_ids][:, 0].cpu().numpy().tolist())
+                        cur_reward_sum[new_ids] = 0
+                        cur_episode_length[new_ids] = 0
+                        if self.alg.rnd:
+                            erewbuffer.extend(cur_ereward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                            irewbuffer.extend(cur_ireward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                            cur_ereward_sum[new_ids] = 0
+                            cur_ireward_sum[new_ids] = 0
 
-            obs, rewards, dones, infos = self.env.step(actions)
+                stop = time.time()
+                collection_time = stop - start
+                start = stop
+                self.alg.compute_returns(obs)
 
-            # joint_pos is the first ObsTerm — first 6 dims of obs vector.
-            # Order: base_yaw, shoulder_pitch, elbow_pitch,
-            #        wrist_pitch, wrist_roll, gripper_moving
-            # Adjust the slice if your obs order differs.
-            jp = obs[:, :6]
-            self._joint_pos_mins.append(jp.min(dim=0).values.detach())
-            self._joint_pos_maxs.append(jp.max(dim=0).values.detach())
+            loss_dict = self.alg.update()
 
-            self.alg.process_env_step(rewards, dones, infos)
+            stop = time.time()
+            learn_time = stop - start
+            self.current_learning_iteration = it
 
-        if policy is not None:
-            policy.train()
-        self.alg.compute_returns(obs)
+            if self.log_dir is not None and not self.disable_logs:
+                self.log(locals())
+                if it % self.save_interval == 0:
+                    self.save(os.path.join(self.log_dir, f"model_{it}.pt"))
+
+            ep_infos.clear()
+
+            if it == start_iter and not self.disable_logs:
+                git_file_paths = store_code_state(self.log_dir, self.git_status_repos)
+                if self.logger_type in ["wandb", "neptune"] and git_file_paths:
+                    for path in git_file_paths:
+                        self.writer.save_file(path)
+
+        if self.log_dir is not None and not self.disable_logs:
+            self.save(os.path.join(self.log_dir, f"model_{self.current_learning_iteration}.pt"))
 
     # ------------------------------------------------------------------
-    # Override log to print diagnostics after each PPO update.
+    # Override log() to append debug diagnostics after the standard output.
+    # Uses the correct locs keys from the RSL-RL 3.x learn() locals().
     # ------------------------------------------------------------------
-    def log(self, locs: dict, width: int = 80, pad: int = 35) -> str:
-        # run parent log first so standard RSL-RL output is preserved
-        log_str = super().log(locs, width=width, pad=pad)
+    def log(self, locs: dict, width: int = 80, pad: int = 35):
+        # Run the parent log first so all standard RSL-RL output is preserved
+        super().log(locs, width=width, pad=pad)
 
-        it            = locs.get("it", 0)
-        obs_batch     = locs.get("obs_batch")      # (T*N, obs_dim) from PPO update
-        values_batch  = locs.get("values_batch")   # (T*N, 1)
-        actions_batch = locs.get("actions_batch")  # (T*N, act_dim)
+        it      = locs.get("it", 0)
+        # last-step obs and actions are in locs (from the rollout loop locals)
+        obs     = locs.get("obs")      # (num_envs, obs_dim) — last rollout step
+        actions = locs.get("actions")  # (num_envs, act_dim) — last rollout step
 
         sep = "=" * width
         print(f"\n{sep}")
         print(f"  DEBUG  |  Iteration {it}")
         print(sep)
 
-        # 1. Action norm (per-step mean during rollout)
-        if self._action_norms:
-            a = np.array(self._action_norms)
+        # 1. Action norm across all rollout steps
+        if self._dbg_action_norms:
+            a = np.array(self._dbg_action_norms)
             w = "  <-- HIGH, policy saturating" if a.max() > 5.0 else ""
             print(f"  {'Action norm (mean/env per step)':.<{pad}} "
                   f"mean={a.mean():.4f}  max={a.max():.4f}  min={a.min():.4f}{w}")
         else:
-            print(f"  {'Action norm':.<{pad}} (no data — collect_rollouts not hooked)")
+            print(f"  {'Action norm':.<{pad}} (no data)")
 
-        # 2. Action delta norm (step-to-step change — causes action_rate explosion)
-        if self._action_delta_norms:
-            a = np.array(self._action_delta_norms)
-            w = "  <-- HIGH, action_rate reward will explode" if a.max() > 3.0 else ""
+        # 2. Action delta norm (step-to-step change — drives action_rate explosion)
+        if self._dbg_action_delta_norms:
+            a = np.array(self._dbg_action_delta_norms)
+            w = "  <-- HIGH, action_rate will explode" if a.max() > 3.0 else ""
             print(f"  {'Action delta norm (step-to-step)':.<{pad}} "
                   f"mean={a.mean():.4f}  max={a.max():.4f}  min={a.min():.4f}{w}")
 
-        # 3. Per-joint position range across entire rollout
-        if self._joint_pos_mins:
-            jmin = torch.stack(self._joint_pos_mins).min(dim=0).values
-            jmax = torch.stack(self._joint_pos_maxs).max(dim=0).values
+        # 3. Per-joint position range across the entire rollout
+        if self._dbg_joint_pos_mins:
+            jmin = torch.stack(self._dbg_joint_pos_mins).min(dim=0).values
+            jmax = torch.stack(self._dbg_joint_pos_maxs).max(dim=0).values
             names = [
                 "base_yaw", "shoulder_pitch", "elbow_pitch",
                 "wrist_pitch", "wrist_roll", "gripper_moving",
@@ -274,88 +311,93 @@ class DebugOnPolicyRunner(OnPolicyRunner):
                 w = "  *** RUNAWAY ***" if rng > 3.5 else ("  * wide *" if rng > 2.0 else "")
                 print(f"    {name:.<22} [{lo:+.3f}, {hi:+.3f}]  range={rng:.3f}{w}")
 
-        # 4. Observation batch stats
-        if obs_batch is not None:
-            omax  = obs_batch.abs().max().item()
-            nan_n = int(torch.isnan(obs_batch).sum())
-            inf_n = int(torch.isinf(obs_batch).sum())
+        # 4. Last-step observation stats
+        if obs is not None:
+            omax  = obs.abs().max().item()
+            nan_n = int(torch.isnan(obs).sum())
+            inf_n = int(torch.isinf(obs).sum())
             w = "  <-- HIGH, normaliser may be failing" if omax > 50 else ""
-            print(f"\n  Observation batch:")
-            print(f"    {'mean':.<{pad}} {obs_batch.mean().item():+.4f}")
-            print(f"    {'std':.<{pad}} {obs_batch.std().item():.4f}")
+            print(f"\n  Last-step observation stats:")
+            print(f"    {'mean':.<{pad}} {obs.mean().item():+.4f}")
+            print(f"    {'std':.<{pad}} {obs.std().item():.4f}")
             print(f"    {'abs max':.<{pad}} {omax:.4f}{w}")
             if nan_n: print(f"    *** {nan_n} NaN values in observations! ***")
             if inf_n: print(f"    *** {inf_n} Inf values in observations! ***")
-        else:
-            print(f"\n  Observation batch: (not in locs — key name may differ in this RSL-RL version)")
 
-        # 5. Value function stats — primary early-warning for divergence / crash
-        if values_batch is not None:
-            vmax  = values_batch.abs().max().item()
-            nan_n = int(torch.isnan(values_batch).sum())
-            inf_n = int(torch.isinf(values_batch).sum())
-            if   vmax > 500: w = "  <-- CRITICAL, crash imminent"
-            elif vmax > 100: w = "  <-- WARNING, diverging"
-            else:            w = ""
-            print(f"\n  Value function batch:")
-            print(f"    {'mean':.<{pad}} {values_batch.mean().item():+.4f}")
-            print(f"    {'std':.<{pad}} {values_batch.std().item():.4f}")
-            print(f"    {'abs max':.<{pad}} {vmax:.4f}{w}")
-            if nan_n: print(f"    *** {nan_n} NaN in value estimates! ***")
-            if inf_n: print(f"    *** CRITICAL: {inf_n} Inf in value estimates — crash this iter ***")
-        else:
-            # locs keys vary by version — print them once so we can fix the names
-            if not getattr(self, "_locs_keys_shown", False):
-                print(f"\n  Value function batch: (not in locs)")
-                print(f"  [DEBUG] Available locs keys: {list(locs.keys())}")
-                self._locs_keys_shown = True
-
-        # 6. Actions batch stats (from the PPO minibatch update)
-        if actions_batch is not None:
-            anorm = actions_batch.norm(dim=-1)
+        # 5. Last-step action stats
+        if actions is not None:
+            anorm = actions.norm(dim=-1)
             w = "  <-- HIGH" if anorm.max().item() > 5 else ""
-            print(f"\n  Actions batch (PPO minibatch):")
+            print(f"\n  Last-step action stats:")
             print(f"    {'norm mean':.<{pad}} {anorm.mean().item():.4f}")
             print(f"    {'norm max':.<{pad}} {anorm.max().item():.4f}{w}")
-            print(f"    {'std':.<{pad}} {actions_batch.std().item():.4f}")
+            print(f"    {'std':.<{pad}} {actions.std().item():.4f}")
 
-        # 7. Gradient norms — detects exploding gradients before crash
-        actor_mod, critic_mod = self._get_actor_critic()
-        ag = self._grad_norm(actor_mod)
-        cg = self._grad_norm(critic_mod)
-        print(f"\n  Gradient norms (after PPO update):")
-        if not np.isnan(ag):
-            aw = "  <-- HIGH, clipping may not be working" if ag > 1.0 else ""
-            print(f"    {'actor':.<{pad}} {ag:.4f}{aw}")
+        # 6. Loss dict — value_function_loss is the key crash indicator
+        loss_dict = locs.get("loss_dict", {})
+        if loss_dict:
+            print(f"\n  Loss values:")
+            for k, v in loss_dict.items():
+                vf = float(v)
+                w = ""
+                if "value" in k and vf > 100:  w = "  <-- WARNING, diverging"
+                if "value" in k and vf > 1000: w = "  <-- CRITICAL, crash imminent"
+                if not np.isfinite(vf):         w = "  *** INF/NAN — crash this iter ***"
+                print(f"    {k:.<{pad}} {vf:.6f}{w}")
+
+        # 7. Gradient norms — self.alg.policy is the ActorCritic module in RSL-RL 3.x
+        policy = getattr(self.alg, "policy", None)
+        if policy is not None:
+            # Try to get actor and critic sub-modules separately for finer resolution
+            actor_mod  = getattr(policy, "actor",  None)
+            critic_mod = getattr(policy, "critic", None)
+            print(f"\n  Gradient norms (after PPO update):")
+            if isinstance(actor_mod, torch.nn.Module):
+                ag = self._grad_norm(actor_mod)
+                aw = "  <-- HIGH, clipping may not be working" if ag > 1.0 else ""
+                print(f"    {'actor':.<{pad}} {ag:.4f}{aw}")
+            if isinstance(critic_mod, torch.nn.Module):
+                cg = self._grad_norm(critic_mod)
+                cw = "  <-- HIGH, value explosion risk" if cg > 1.0 else ""
+                print(f"    {'critic':.<{pad}} {cg:.4f}{cw}")
+            if not isinstance(actor_mod, torch.nn.Module) and not isinstance(critic_mod, torch.nn.Module):
+                # Fall back to whole policy norm
+                pg = self._grad_norm(policy)
+                pw = "  <-- HIGH" if pg > 1.0 else ""
+                print(f"    {'policy (combined)':.<{pad}} {pg:.4f}{pw}")
         else:
-            print(f"    {'actor':.<{pad}} (module not found)")
-        if not np.isnan(cg):
-            cw = "  <-- HIGH, value explosion risk" if cg > 1.0 else ""
-            print(f"    {'critic':.<{pad}} {cg:.4f}{cw}")
-        else:
-            print(f"    {'critic':.<{pad}} (module not found)")
+            print(f"\n  Gradient norms: (self.alg.policy not found)")
 
         print(sep + "\n")
 
-        # 8. Mirror everything to TensorBoard under Debug/
+        # 8. Mirror to TensorBoard under Debug/
         writer = getattr(self, "writer", None)
         if writer is not None:
-            if self._action_norms:
-                writer.add_scalar("Debug/action_norm_mean",  float(np.mean(self._action_norms)),  it)
-                writer.add_scalar("Debug/action_norm_max",   float(np.max(self._action_norms)),   it)
-            if self._action_delta_norms:
-                writer.add_scalar("Debug/action_delta_mean", float(np.mean(self._action_delta_norms)), it)
-                writer.add_scalar("Debug/action_delta_max",  float(np.max(self._action_delta_norms)),  it)
-            if obs_batch is not None:
-                writer.add_scalar("Debug/obs_abs_max", obs_batch.abs().max().item(), it)
-                writer.add_scalar("Debug/obs_std",     obs_batch.std().item(),       it)
-            if values_batch is not None:
-                writer.add_scalar("Debug/value_abs_max", values_batch.abs().max().item(), it)
-                writer.add_scalar("Debug/value_std",     values_batch.std().item(),       it)
-            if not np.isnan(ag): writer.add_scalar("Debug/actor_grad_norm",  ag, it)
-            if not np.isnan(cg): writer.add_scalar("Debug/critic_grad_norm", cg, it)
+            if self._dbg_action_norms:
+                writer.add_scalar("Debug/action_norm_mean",  float(np.mean(self._dbg_action_norms)),  it)
+                writer.add_scalar("Debug/action_norm_max",   float(np.max(self._dbg_action_norms)),   it)
+            if self._dbg_action_delta_norms:
+                writer.add_scalar("Debug/action_delta_mean", float(np.mean(self._dbg_action_delta_norms)), it)
+                writer.add_scalar("Debug/action_delta_max",  float(np.max(self._dbg_action_delta_norms)),  it)
+            if obs is not None:
+                writer.add_scalar("Debug/obs_abs_max", obs.abs().max().item(), it)
+                writer.add_scalar("Debug/obs_std",     obs.std().item(),       it)
+            policy = getattr(self.alg, "policy", None)
+            if policy is not None:
+                actor_mod  = getattr(policy, "actor",  None)
+                critic_mod = getattr(policy, "critic", None)
+                if isinstance(actor_mod, torch.nn.Module):
+                    writer.add_scalar("Debug/actor_grad_norm",  self._grad_norm(actor_mod),  it)
+                if isinstance(critic_mod, torch.nn.Module):
+                    writer.add_scalar("Debug/critic_grad_norm", self._grad_norm(critic_mod), it)
 
-        return log_str
+    @staticmethod
+    def _grad_norm(module: torch.nn.Module) -> float:
+        total = 0.0
+        for p in module.parameters():
+            if p.grad is not None:
+                total += p.grad.data.norm(2).item() ** 2
+        return total ** 0.5
 
 # ==============================================================================
 # END DEBUG
