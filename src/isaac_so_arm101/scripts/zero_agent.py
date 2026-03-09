@@ -50,6 +50,13 @@ def main():
     print(f"[INFO]: Gym action space: {env.action_space}")
     # reset environment
     env.reset()
+    # --- added for debug ---
+    robot = env.unwrapped.scene["robot"]
+    print("Joint names:", robot.joint_names)
+    print("Stiffness:", robot.actuators)
+    for name, actuator in robot.actuators.items():
+        print(f"Actuator '{name}': stiffness={actuator.stiffness}, damping={actuator.damping}")
+    # --- end of debug ---
     # simulate environment
     while simulation_app.is_running():
         # run everything in inference mode

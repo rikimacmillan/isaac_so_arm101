@@ -128,9 +128,13 @@ class EventCfg:
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.5, 1.0), # reduced the upper bound from 1.5 to stay within limits
+            "position_range": (0.0, 0.0), # Temporarily start at zero to verify arm can hold a position
             "velocity_range": (0.0, 0.0),
         },
+        # params={
+        #     "position_range": (0.5, 1.0), # reduced the upper bound from 1.5 to stay within limits
+        #     "velocity_range": (0.0, 0.0),
+        # },
     )
 
 
