@@ -23,6 +23,7 @@ TEMPLATE_ASSETS_DATA_DIR = Path(__file__).resolve().parent
 #   gripper_moving: 1x STS3215 -> effort=2.94,  velocity=4.76
 
 PING_TI_CFG = ArticulationCfg(
+    actuator_value_resolution_debug_print=True,
     spawn=sim_utils.UrdfFileCfg(
         fix_base=True,
         replace_cylinders_with_capsules=True,
