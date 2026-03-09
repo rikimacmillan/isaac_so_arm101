@@ -50,6 +50,7 @@ def main():
     print(f"[INFO]: Gym action space: {env.action_space}")
     # reset environment
     env.reset()
+    step = 0
     # simulate environment
     while simulation_app.is_running():
         # run everything in inference mode
@@ -58,6 +59,14 @@ def main():
             actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
             # apply actions
             env.step(actions)
+            
+            if step % 10 == 0:
+                robot = env.unwrapped.scene["robot"]
+                pos = robot.data.joint_pos[0]   # first env only
+                vel = robot.data.joint_vel[0]
+                print(f"Step {step:4d} | pos: {pos.cpu().numpy().round(3)} | vel: {vel.cpu().numpy().round(3)}")
+            step += 1
+
 
     # close the simulator
     env.close()

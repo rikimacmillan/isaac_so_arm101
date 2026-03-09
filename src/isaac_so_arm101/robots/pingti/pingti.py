@@ -26,13 +26,14 @@ PING_TI_CFG = ArticulationCfg(
     actuator_value_resolution_debug_print=True,
     spawn=sim_utils.UrdfFileCfg(
         fix_base=True,
-        merge_fixed_joints=False,  # change from True
-        link_density=1000.0,  # add this — overrides all URDF inertials with uniform density
+        # merge_fixed_joints=False,  # change from True
+        # link_density=1000.0,  # add this — overrides all URDF inertials with uniform density
         replace_cylinders_with_capsules=True,
         asset_path=f"{TEMPLATE_ASSETS_DATA_DIR}/PingTi_Arm_5DOF_v4_copy.urdf", # Updated urdf file I created
         activate_contact_sensors=False, # set as false while waiting for capsule implementation
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
+            disable_gravity=True, # changed from False
+            # disable_gravity=False,
             max_depenetration_velocity=5.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
