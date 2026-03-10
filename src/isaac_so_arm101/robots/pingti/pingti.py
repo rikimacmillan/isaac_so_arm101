@@ -35,8 +35,8 @@ PING_TI_CFG = ArticulationCfg(
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            solver_position_iteration_count=8,
-            solver_velocity_iteration_count=0,
+            solver_position_iteration_count=12, # increased from 8
+            solver_velocity_iteration_count=1, # increased from 0 for stability
         ),
         # joint_drive MUST be initialized with zeros so PhysX drive mode is set up.
         # ImplicitActuatorCfg then overwrites stiffness/damping at runtime.
