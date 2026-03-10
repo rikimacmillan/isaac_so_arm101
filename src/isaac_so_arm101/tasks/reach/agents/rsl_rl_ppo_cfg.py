@@ -24,10 +24,9 @@ class ReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "reach"
     run_name = ""
     resume = False
-    clip_actions = 1.0
     empirical_normalization = True  # changed from False
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=0.5,
+        init_noise_std=1.0,
         actor_hidden_dims=[64, 64], # can increase the network size for this reaching task [256, 128, 64]
         critic_hidden_dims=[64, 64], # can increase the network size for this reaching task [256, 128, 64]
         activation="elu",
@@ -36,10 +35,10 @@ class ReachPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.005,        # increased from 0.001 — helps prevent premature convergence
-        num_learning_epochs=5,     # reduced from 8 — fewer epochs per batch = more stable
+        entropy_coef=0.001,
+        num_learning_epochs=8,
         num_mini_batches=4,
-        learning_rate=1.0e-4,      # reduced from 1e-3 — this is the primary fix
+        learning_rate=1e-3,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,

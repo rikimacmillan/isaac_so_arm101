@@ -128,13 +128,9 @@ class EventCfg:
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.0, 0.0), # Temporarily start at zero to verify arm can hold a position
+            "position_range": (0.5, 1.0), # reduced the upper bound from 1.5 to stay within limits
             "velocity_range": (0.0, 0.0),
         },
-        # params={
-        #     "position_range": (0.5, 1.0), # reduced the upper bound from 1.5 to stay within limits
-        #     "velocity_range": (0.0, 0.0),
-        # },
     )
 
 
@@ -191,13 +187,11 @@ class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
     action_rate = CurrTerm(
-        func=mdp.modify_reward_weight,
-        params={"term_name": "action_rate", "weight": -0.0005, "num_steps": 200000},
+        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -0.005, "num_steps": 4500}
     )
 
     joint_vel = CurrTerm(
-        func=mdp.modify_reward_weight,
-        params={"term_name": "joint_vel", "weight": -0.0002, "num_steps": 200000},
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -0.001, "num_steps": 4500}
     )
 
 
