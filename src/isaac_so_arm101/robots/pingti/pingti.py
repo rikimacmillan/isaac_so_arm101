@@ -47,6 +47,7 @@ PING_TI_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         rot=(1.0, 0.0, 0.0, 0.0),
+        pos=(0.55, 0.0, 0.75) # adjusted for the PingTi arm relative to the table
         # Exact joint names extracted
         joint_pos={
             "base_yaw": 0.0,
