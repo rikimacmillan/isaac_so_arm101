@@ -5,13 +5,13 @@
   <!-- Link base_link -->
   <link name="base_link">
     <inertial>
-      <origin xyz="-0.0109154 0.81779 0.126117" rpy="0 0 0"/>
+      <origin xyz="-3.10996e-06 0.0145714 0.0268193" rpy="0 0 0"/>
       <mass value="0.42363"/>
       <inertia ixx="0.000376425" ixy="-8.506e-09" ixz="4.7691e-08" iyy="0.000409372" iyz="-3.47731e-05" izz="0.000399556"/>
     </inertial>
     <!-- Part sts3215_base_yaw -->
     <visual>
-      <origin xyz="-0.0109123 0.80818 0.145398" rpy="0 0 -1.5708"/>
+      <origin xyz="-0 0.00496106 0.0461" rpy="0 -0 -1.5708"/>
       <geometry>
         <mesh filename="assets/sts3215_base_yaw.stl"/>
       </geometry>
@@ -20,14 +20,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0109123 0.80818 0.145398" rpy="0 0 -1.5708"/>
+      <origin xyz="-0 0.00496106 0.0461" rpy="0 -0 -1.5708"/>
       <geometry>
         <mesh filename="assets/sts3215_base_yaw.stl"/>
       </geometry>
     </collision>
     <!-- Part base_link -->
     <visual>
-      <origin xyz="-0.0109123 0.836841 0.0992979" rpy="1.5708 -0 -0"/>
+      <origin xyz="-0 0.0336225 -0" rpy="1.5708 -0 0"/>
       <geometry>
         <mesh filename="assets/base_link.stl"/>
       </geometry>
@@ -36,7 +36,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0109123 0.836841 0.0992979" rpy="1.5708 -0 -0"/>
+      <origin xyz="-0 0.0336225 -0" rpy="1.5708 -0 0"/>
       <geometry>
         <mesh filename="assets/base_link.stl"/>
       </geometry>
@@ -51,7 +51,7 @@
     </inertial>
     <!-- Part base_yaw_link -->
     <visual>
-      <origin xyz="-0.0395021 0.00817395 -0.501565" rpy="1.5708 -0 1.5708"/>
+      <origin xyz="-0.0395021 0.00817395 -0.501565" rpy="1.5708 0 1.5708"/>
       <geometry>
         <mesh filename="assets/base_yaw_link.stl"/>
       </geometry>
@@ -60,7 +60,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="-0.0395021 0.00817395 -0.501565" rpy="1.5708 -0 1.5708"/>
+      <origin xyz="-0.0395021 0.00817395 -0.501565" rpy="1.5708 0 1.5708"/>
       <geometry>
         <mesh filename="assets/base_yaw_link.stl"/>
       </geometry>
@@ -107,7 +107,7 @@
     </inertial>
     <!-- Part sts3215_elbow_pitch_2 -->
     <visual>
-      <origin xyz="0.0192 0.23165 0.0610856" rpy="0 -0 -0"/>
+      <origin xyz="0.0192 0.23165 0.0610856" rpy="0 -0 0"/>
       <geometry>
         <mesh filename="assets/sts3215_elbow_pitch_2.stl"/>
       </geometry>
@@ -116,14 +116,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0192 0.23165 0.0610856" rpy="0 -0 -0"/>
+      <origin xyz="0.0192 0.23165 0.0610856" rpy="0 -0 0"/>
       <geometry>
         <mesh filename="assets/sts3215_elbow_pitch_2.stl"/>
       </geometry>
     </collision>
     <!-- Part sts3215_elbow_pitch_1 -->
     <visual>
-      <origin xyz="0.0192 0.23165 0.0205584" rpy="-3.14159 0 -0"/>
+      <origin xyz="0.0192 0.23165 0.0205584" rpy="-3.14159 -0 0"/>
       <geometry>
         <mesh filename="assets/sts3215_elbow_pitch_1.stl"/>
       </geometry>
@@ -132,7 +132,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0192 0.23165 0.0205584" rpy="-3.14159 0 -0"/>
+      <origin xyz="0.0192 0.23165 0.0205584" rpy="-3.14159 -0 0"/>
       <geometry>
         <mesh filename="assets/sts3215_elbow_pitch_1.stl"/>
       </geometry>
@@ -219,7 +219,7 @@
     </inertial>
     <!-- Part wrist_link -->
     <visual>
-      <origin xyz="0.028 -0 0.0181" rpy="-0 -1.5708 0"/>
+      <origin xyz="0.028 0 0.0181" rpy="-0 -1.5708 0"/>
       <geometry>
         <mesh filename="assets/wrist_link.stl"/>
       </geometry>
@@ -228,7 +228,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.028 -0 0.0181" rpy="-0 -1.5708 0"/>
+      <origin xyz="0.028 0 0.0181" rpy="-0 -1.5708 0"/>
       <geometry>
         <mesh filename="assets/wrist_link.stl"/>
       </geometry>
@@ -259,7 +259,7 @@
     </inertial>
     <!-- Part gripper_mount -->
     <visual>
-      <origin xyz="0 0 -0" rpy="-3.14159 0 0"/>
+      <origin xyz="0 0 0" rpy="-3.14159 0 0"/>
       <geometry>
         <mesh filename="assets/gripper_mount.stl"/>
       </geometry>
@@ -268,14 +268,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 -0" rpy="-3.14159 0 0"/>
+      <origin xyz="0 0 0" rpy="-3.14159 0 0"/>
       <geometry>
         <mesh filename="assets/gripper_mount.stl"/>
       </geometry>
     </collision>
     <!-- Part sts3215_gripper -->
     <visual>
-      <origin xyz="0.0005 -0 -0.0234" rpy="-1.5708 0 0"/>
+      <origin xyz="0.0005 0 -0.0234" rpy="-1.5708 0 0"/>
       <geometry>
         <mesh filename="assets/sts3215_gripper.stl"/>
       </geometry>
@@ -284,7 +284,7 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0.0005 -0 -0.0234" rpy="-1.5708 0 0"/>
+      <origin xyz="0.0005 0 -0.0234" rpy="-1.5708 0 0"/>
       <geometry>
         <mesh filename="assets/sts3215_gripper.stl"/>
       </geometry>
@@ -340,7 +340,7 @@
   </joint>
   <!-- Joint from shoulder_link to wrist_mount_link -->
   <joint name="elbow_pitch" type="revolute">
-    <origin xyz="0.0317 0.23165 0.00195843" rpy="0 0 -0"/>
+    <origin xyz="0.0317 0.23165 0.00195843" rpy="0 -0 0"/>
     <parent link="shoulder_link"/>
     <child link="wrist_mount_link"/>
     <axis xyz="0 0 1"/>
@@ -348,7 +348,7 @@
   </joint>
   <!-- Joint from base_yaw_link to shoulder_link -->
   <joint name="shoulder_pitch" type="revolute">
-    <origin xyz="0.03305 0.0391987 0.0928" rpy="1.5708 -0.122333 0"/>
+    <origin xyz="0.03305 0.0391987 0.0928" rpy="1.5708 -0.122333 -0"/>
     <parent link="base_yaw_link"/>
     <child link="shoulder_link"/>
     <axis xyz="0 0 1"/>
@@ -356,7 +356,7 @@
   </joint>
   <!-- Joint from base_link to base_yaw_link -->
   <joint name="base_yaw" type="revolute">
-    <origin xyz="-0.0109123 0.79568 0.127098" rpy="0 0 -1.5708"/>
+    <origin xyz="-0 -0.00753894 0.0278" rpy="0 -0 -1.5708"/>
     <parent link="base_link"/>
     <child link="base_yaw_link"/>
     <axis xyz="0 0 1"/>
