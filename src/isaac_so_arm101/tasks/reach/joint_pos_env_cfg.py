@@ -136,7 +136,7 @@ class PingTiReachEnvCfg(ReachEnvCfg):
         self.commands.ee_pose.ranges = mdp.UniformPoseCommandCfg.Ranges(
             pos_x=(-0.05, 0.05),   # directly above base
             pos_y=(-0.05, 0.05),   # directly above base
-            pos_z=(0.3, 0.4),      # 30-40cm above base = straight up
+            pos_z=(0.6, 0.7),      # 60-70cm above base = straight up
             roll=(0.0, 0.0),
             pitch=(0.0, 0.0),
             yaw=(0.0, 0.0),
