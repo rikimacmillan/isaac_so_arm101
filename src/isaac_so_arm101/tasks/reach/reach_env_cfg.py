@@ -40,19 +40,27 @@ from isaaclab_tasks.manager_based.classic.cartpole.mdp.rewards import joint_pos_
 class ReachSceneCfg(InteractiveSceneCfg):
     """Configuration for the scene with a robotic arm."""
 
-    # world
-    ground = AssetBaseCfg(
-        prim_path="/World/ground",
-        spawn=sim_utils.GroundPlaneCfg(),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, -1.05)),
-    )
-
-    table = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/Table",
+    # # world
+    # ground = AssetBaseCfg(
+    #     prim_path="/World/ground",
+    #     spawn=sim_utils.GroundPlaneCfg(),
+    #     init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, -1.05)),
+    # )
+    # table = AssetBaseCfg(
+    #     prim_path="{ENV_REGEX_NS}/Table",
+    #     spawn=sim_utils.UsdFileCfg(
+    #         usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
+    #     ),
+    #     init_state=AssetBaseCfg.InitialStateCfg(pos=(0.55, 0.0, 0.0), rot=(0.70711, 0.0, 0.0, 0.70711)),
+    # )
+    
+    # Load your custom background scene (replaces ground and table)
+    # Use the {ENV_REGEX_NS} to ensure the scene is cloned for every environment instance
+    custom_env = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/Scene",
         spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
+            usd_path="/home/cirp-lab/moore/palm_tree_models/blender/pretoria_gardens_4k/pretoria_gardens_4k_env_v2.usd",
         ),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.55, 0.0, 0.0), rot=(0.70711, 0.0, 0.0, 0.70711)),
     )
 
     # robots
@@ -205,7 +213,8 @@ class ReachEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the reach end-effector pose tracking environment."""
 
     # Scene settings
-    scene: ReachSceneCfg = ReachSceneCfg(num_envs=4096, env_spacing=2.5)
+    # scene: ReachSceneCfg = ReachSceneCfg(num_envs=4096, env_spacing=2.5)
+    scene: ReachSceneCfg = ReachSceneCfg(num_envs=4096, env_spacing=50.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
