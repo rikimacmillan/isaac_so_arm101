@@ -59,7 +59,7 @@ class ReachSceneCfg(InteractiveSceneCfg):
     custom_env = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/Scene",
         spawn=sim_utils.UsdFileCfg(
-            usd_path="/home/cirp-lab/moore/palm_tree_models/blender/pretoria_gardens_4k/pretoria_gardens_4k_env_v2.usd",
+            usd_path="/home/cirp-lab/moore/palm_tree_models/blender/pretoria_gardens_4k/pretoria_gardens_4k_env_v2.usdc",
         ),
     )
 
