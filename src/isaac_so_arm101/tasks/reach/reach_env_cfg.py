@@ -66,11 +66,11 @@ class ReachSceneCfg(InteractiveSceneCfg):
     # robots
     robot: ArticulationCfg = MISSING
 
-    # lights
-    light = AssetBaseCfg(
-        prim_path="/World/light",
-        spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=2500.0),
-    )
+    # # lights
+    # light = AssetBaseCfg(
+    #     prim_path="/World/light",
+    #     spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=2500.0),
+    # )
 
 
 ##
