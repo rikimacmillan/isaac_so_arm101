@@ -30,13 +30,6 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 from isaaclab_tasks.manager_based.classic.cartpole.mdp.rewards import joint_pos_target_l2 # added this to use joint_pos_target_l2
 
-from isaaclab.sensors import TiledCameraCfg
-from isaaclab.envs.mdp import DifferentialInverseKinematicsActionCfg
-from isaaclab.controllers import DifferentialIKControllerCfg
-import torch
-from isaaclab.utils.math import quat_from_euler_xyz
-from .joint_pos_env_cfg import PingTiReachEnvCfg # import the PingTiReachEnvCfg to use as a base for the VLA config
-
 
 ##
 # Scene definition
@@ -242,66 +235,4 @@ class ReachEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1.0 / 60.0
 
-
-
-##
-# VLA Specific Configuration
-##
-
-# Convert your Euler angles (degrees) to a Quaternion (w, x, y, z)
-# Euler: X=-2.0, Y=-9.067, Z=-90.0
-camera_quat = quat_from_euler_xyz(
-    torch.tensor([-2.0 * (3.14159 / 180.0)]), 
-    torch.tensor([-9.067 * (3.14159 / 180.0)]), 
-    torch.tensor([-90.0 * (3.14159 / 180.0)])
-)
-
-@configclass
-class ReachVlaSceneCfg(ReachSceneCfg):
-    """Extends the scene to spawn a camera on every robot instance."""
-    
-    wrist_camera: TiledCameraCfg = TiledCameraCfg(
-        # The prim_path tells Isaac Lab to put the camera under the gripper link of every robot
-        prim_path="{ENV_REGEX_NS}/Robot/sts3215_gripper/camera",
-        update_period=0.0, # Updates every simulation step
-        data_types=["rgb"],
-        spawn=sim_utils.PinholeCameraCfg(
-            focal_length=24.0,
-            horizontal_aperture=20.955,
-            clipping_range=(0.01, 100.0),
-        ),
-        width=256,
-        height=256,
-        # Apply your exact X, Y, Z position and the converted Rotation
-        offset=TiledCameraCfg.OffsetCfg(
-            pos=(-0.01371, 0.03346, -0.02114),
-            rot=(camera_quat[0, 0].item(), camera_quat[0, 1].item(), camera_quat[0, 2].item(), camera_quat[0, 3].item()),
-            convention="opengl", # Standard Isaac Sim convention
-        ),
-    )
-
-@configclass
-class ReachVlaEnvCfg(PingTiReachEnvCfg):
-    """The main environment config using the VLA scene."""
-    def __post_init__(self):
-        # This populates the robot, rewards, and other settings from the PingTiReachEnvCfg
-        super().__post_init__()
-
-        # Save the robot, swap to our camera scene, and put robot back
-        configured_robot = self.scene.robot
-        self.scene = ReachVlaSceneCfg(num_envs=self.scene.num_envs, env_spacing=self.scene.env_spacing)
-        self.scene.robot = configured_robot
-
-        # Setup the Arm Action (5-DoF IK)
-        self.actions.arm_action = DifferentialInverseKinematicsActionCfg(
-            asset_name="robot", 
-            joint_names=["base_yaw", "shoulder_pitch", "elbow_pitch", "wrist_pitch", "wrist_roll"],
-            body_name="sts3215_gripper", # EXACT match from URDF for the 5th joint's child link
-            controller=DifferentialIKControllerCfg(
-                command_type="pose", 
-                use_relative_mode=True, 
-                ik_method="dls"         
-            ),
-        )
-        
 # can add a ReachEnvCfg_PLAY config to customize the environment during playback

@@ -80,8 +80,8 @@ gym.register(
     id="Isaac-PING-TI-VLA-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     kwargs={
-        # Point to the file you've been editing (reach_env_cfg.py)
-        "env_cfg_entry_point": f"{__name__}.reach_env_cfg:ReachVlaEnvCfg",
+        # Point to the file we've been editing
+        "env_cfg_entry_point": f"{__name__}.joint_pos_env_cfg:ReachVlaEnvCfg",
     },
     disable_env_checker=True,
 )
