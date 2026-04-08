@@ -43,8 +43,16 @@ def main():
         model_id, 
         torch_dtype=torch.bfloat16, 
         low_cpu_mem_usage=True, 
-        trust_remote_code=True
-    ).to("cuda:0")
+        trust_remote_code=True,
+        load_in_8bit=True, # Automatically loads and converts to 8-bit, keeping it on the GPU. Don't need if moving to bigger GPU
+    )
+    
+    # vla = AutoModelForVision2Seq.from_pretrained(
+    #     model_id, 
+    #     torch_dtype=torch.bfloat16, 
+    #     low_cpu_mem_usage=True, 
+    #     trust_remote_code=True,
+    # ).to("cuda:0")
 
     prompt = "In: What action should the robot take to position the gripper above the palm's crown? \nOut:"
 
