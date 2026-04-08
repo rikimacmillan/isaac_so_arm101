@@ -19,6 +19,7 @@ play = "isaac_so_arm101.scripts.rsl_rl.play:main"
 list_envs = "isaac_so_arm101.scripts.list_envs:main"
 zero_agent = "isaac_so_arm101.scripts.zero_agent:main"
 random_agent = "isaac_so_arm101.scripts.random_agent:main"
+vla_inference = "isaac_so_arm101.scripts.vla.vla_inference:main"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"

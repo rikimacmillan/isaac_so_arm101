@@ -211,7 +211,7 @@ class ReachVlaEnvCfg(PingTiReachEnvCfg):
         self.scene = ReachVlaSceneCfg(num_envs=self.scene.num_envs, env_spacing=self.scene.env_spacing)
         self.scene.robot = configured_robot
 
-        # Setup the Arm Action (5-DoF IK)
+        # The 6-DoF Arm Action
         self.actions.arm_action = DifferentialInverseKinematicsActionCfg(
             asset_name="robot", 
             joint_names=["base_yaw", "shoulder_pitch", "elbow_pitch", "wrist_pitch", "wrist_roll"],
@@ -221,4 +221,12 @@ class ReachVlaEnvCfg(PingTiReachEnvCfg):
                 use_relative_mode=True, 
                 ik_method="dls"         
             ),
+        )
+        
+        # 2. ADD THIS: The 1-DoF Gripper Action
+        self.actions.gripper_action = mdp.JointPositionActionCfg(
+            asset_name="robot",
+            joint_names=["gripper_moving"],
+            scale=1.0, 
+            use_default_offset=False 
         )
