@@ -299,7 +299,7 @@ class ReachVlaEnvCfg(ReachEnvCfg):
         )
 
         # 3. Setup the Gripper Action (1-DoF Direct Position)
-        self.actions.gripper_action = JointPositionActionCfg(
+        self.actions.gripper_action = mdp.JointPositionActionCfg(
             asset_name="robot",
             joint_names=["gripper_moving"], # EXACT match from URDF
             scale=1.0, 
