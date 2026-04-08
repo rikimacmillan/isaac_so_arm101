@@ -49,14 +49,14 @@ uv run random_agent --task SO-ARM100-Reach-Play-v0  # send random actions
 Code for PingTi arm and RL PPO Algorithm.
 
 ```bash
-uv run train -task Isaac-PING-TI-Reach-v0 --headless
-uv run play -task Isaac-PING-TI-Reach-Play-v0
+uv run train --task Isaac-PING-TI-Reach-v0 --headless
+uv run play --task Isaac-PING-TI-Reach-Play-v0
 ```
 
 Test with VLA model.
 
 ```bash
-uv run vla_inference -task Isaac-PING-TI-VLA-v0 --num_envs 1 --enable_cameras
+uv run vla_inference --task Isaac-PING-TI-VLA-v0 --num_envs 1 --enable_cameras
 ```
 
 Train a RL-based IK policy.
