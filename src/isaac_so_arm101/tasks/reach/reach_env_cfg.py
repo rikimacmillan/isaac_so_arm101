@@ -35,6 +35,7 @@ from isaaclab.envs.mdp import DifferentialInverseKinematicsActionCfg
 from isaaclab.controllers import DifferentialIKControllerCfg
 import torch
 from isaaclab.utils.math import quat_from_euler_xyz
+from .joint_pos_env_cfg import PingTiReachEnvCfg # import the PingTiReachEnvCfg to use as a base for the VLA config
 
 
 ##
@@ -241,11 +242,13 @@ class ReachEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1.0 / 60.0
 
+
+
 ##
 # VLA Specific Configuration
 ##
 
-# 1. Convert your Euler angles (degrees) to a Quaternion (w, x, y, z)
+# Convert your Euler angles (degrees) to a Quaternion (w, x, y, z)
 # Euler: X=-2.0, Y=-9.067, Z=-90.0
 camera_quat = quat_from_euler_xyz(
     torch.tensor([-2.0 * (3.14159 / 180.0)]), 
@@ -278,15 +281,18 @@ class ReachVlaSceneCfg(ReachSceneCfg):
     )
 
 @configclass
-class ReachVlaEnvCfg(ReachEnvCfg):
-    """The main VLA environment config that inherits from your original reach config."""
+class ReachVlaEnvCfg(PingTiReachEnvCfg):
+    """The main environment config using the VLA scene."""
     def __post_init__(self):
+        # This populates the robot, rewards, and other settings from the PingTiReachEnvCfg
         super().__post_init__()
 
-        # 1. Swap the scene to our new VLA-enabled scene
+        # Save the robot, swap to our camera scene, and put robot back
+        configured_robot = self.scene.robot
         self.scene = ReachVlaSceneCfg(num_envs=self.scene.num_envs, env_spacing=self.scene.env_spacing)
+        self.scene.robot = configured_robot
 
-        # 2. Setup the Arm Action (5-DoF IK)
+        # Setup the Arm Action (5-DoF IK)
         self.actions.arm_action = DifferentialInverseKinematicsActionCfg(
             asset_name="robot", 
             joint_names=["base_yaw", "shoulder_pitch", "elbow_pitch", "wrist_pitch", "wrist_roll"],
@@ -296,14 +302,6 @@ class ReachVlaEnvCfg(ReachEnvCfg):
                 use_relative_mode=True, 
                 ik_method="dls"         
             ),
-        )
-
-        # 3. Setup the Gripper Action (1-DoF Direct Position)
-        self.actions.gripper_action = mdp.JointPositionActionCfg(
-            asset_name="robot",
-            joint_names=["gripper_moving"], # EXACT match from URDF
-            scale=1.0, 
-            use_default_offset=False 
         )
         
 # can add a ReachEnvCfg_PLAY config to customize the environment during playback
