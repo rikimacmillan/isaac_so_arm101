@@ -29,7 +29,7 @@ import torch
 import numpy as np
 import gymnasium as gym
 from PIL import Image
-from transformers import AutoModelForVision2Seq, AutoProcessor
+from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
 
 import isaac_so_arm101.tasks  # Ensures your custom environments are registered
 from isaaclab_tasks.utils import parse_env_cfg
@@ -39,13 +39,18 @@ def main():
     # Load Model (OpenVLA 7B)
     model_id = "openvla/openvla-7b"
     processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    
+    quant_config = BitsAndBytesConfig(
+        load_in_8bit=True,
+    )
+    
     vla = AutoModelForVision2Seq.from_pretrained(
         model_id, 
-        torch_dtype=torch.bfloat16, 
+        torch_dtype=torch.bfloat16,
+        quantization_config=quant_config,
         low_cpu_mem_usage=True, 
         trust_remote_code=True,
-        load_in_8bit=True, # Automatically loads and converts to 8-bit, keeping it on the GPU. Don't need if moving to bigger GPU
-        device_map="auto",
+        device_map={"": 0},
     )
     
     # vla = AutoModelForVision2Seq.from_pretrained(
