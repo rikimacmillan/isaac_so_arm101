@@ -45,6 +45,7 @@ def main():
         low_cpu_mem_usage=True, 
         trust_remote_code=True,
         load_in_8bit=True, # Automatically loads and converts to 8-bit, keeping it on the GPU. Don't need if moving to bigger GPU
+        device_map="auto",
     )
     
     # vla = AutoModelForVision2Seq.from_pretrained(
