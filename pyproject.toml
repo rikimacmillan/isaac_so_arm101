@@ -8,9 +8,15 @@ authors = [
 ]
 requires-python = "==3.11.*"
 dependencies = [
+    "accelerate==1.1.1",
+    "bitsandbytes>=0.49.2",
+    "einops>=0.8.1",
     "isaaclab[all,isaacsim]==2.3.0",
+    "timm==0.9.10",
+    "tokenizers==0.19.1",
     "torch==2.7.0",
     "torchvision==0.22.0",
+    "transformers==4.40.1",
 ]
 
 [project.scripts]
