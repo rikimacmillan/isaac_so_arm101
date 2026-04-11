@@ -73,6 +73,8 @@ def main():
     obs, _ = env.reset()
 
     print("[INFO]: Starting Inference Loop!")
+    step_count = 0
+    print_interval = 500
     while simulation_app.is_running():
         with torch.inference_mode():
             # 1. Extract image from the sensor
@@ -102,7 +104,19 @@ def main():
             # 4. Step Simulation
             # Concatenate to make shape (7,), then unsqueeze to make it (1, 7) for num_envs=1
             actions = torch.cat([arm_cmd, gripper_cmd], dim=-1).unsqueeze(0)
+            
+            if step_count % print_interval == 0:
+                print("\n" + "="*40)
+                print(f"[DEBUG] Sim Step: {step_count}")
+                print(f"[DEBUG] Raw VLA Output (EE Command):")
+                print(f"X, Y, Z: {vla_action[:3]}")
+                print(f"Roll, Pitch, Yaw: {vla_action[3:6]}")
+                print(f"Gripper: {vla_action[6]}")
+                print(f"[DEBUG] Tensor sent to env.step(): {actions.cpu().numpy()}")
+                print("="*40 + "\n")
+            # Step zsimulation
             obs, rewards, terminations, truncations, extras = env.step(actions)
+            step_count += 1
 
     env.close()
 
