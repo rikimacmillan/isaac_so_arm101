@@ -34,69 +34,88 @@ from PIL import Image
 import isaac_so_arm101.tasks  # Ensures your custom environments are registered
 from isaaclab_tasks.utils import parse_env_cfg
 
-# How high above the tree base to aim (targets trunk midpoint, not base)
-# Auto-detected at startup from bounding box; this is the fallback default
-TRUNK_TARGET_Z_OFFSET = 0.30  # meters
+# Max position delta per step
+ACTION_CLAMP = 0.15  # meters/step
 
-# Max position delta per step — increase if arm moves too slowly
-ACTION_CLAMP = 0.05  # meters/step
+# Hover height above spray target
+HOVER_OFFSET_Z = 0.10  # meters — small offset since arm workspace is tight
 
-class PickOracle:
+# How long to hold the spray position (in simulation steps)
+SPRAY_DURATION = 60  # steps (~2 seconds at 30fps)
+
+# Spray target: push slightly toward palm (X=0.56) and a bit higher into the canopy
+# Arm natural hover is ~[0.5, 0.03, 5.07], so this is a small reachable adjustment
+SPRAY_TARGET = np.array([0.52, 0.03, 5.15])
+
+
+class SprayOracle:
+    """
+    Spray/retract oracle. States:
+      0 - Approach : fly EE to hover point above canopy
+      1 - Descend  : lower EE to spray position
+      2 - Spray    : hold position, spray signal active
+      3 - Retract  : pull back up to hover height
+      4 - Done
+
+    Each movement state advances when either:
+      - EE is within POSITION_THRESHOLD of the target, OR
+      - The state has been active for MAX_STATE_STEPS (arm is visually close enough)
+    """
+    POSITION_THRESHOLD = 0.08  # meters
+    MAX_STATE_STEPS = 200      # advance after this many steps regardless
+
     def __init__(self):
-        self.state = 0 # 0: Hover, 1: Descend, 2: Grasp, 3: Lift
-        self.wait_counter = 0
-        
-    def compute_action(self, ee_pos, target_pos):
+        self.state = 0
+        self.spray_counter = 0
+        self.state_steps = 0
+
+    def _advance(self, next_state, msg):
+        print(f"[ORACLE]: {msg} (after {self.state_steps} steps)")
+        self.state = next_state
+        self.state_steps = 0
+
+    def compute_action(self, ee_pos, spray_target):
         """
-        Takes a current End-Effector position and Target position.
-        Returns a 7D action vector: [X, Y, Z, Roll, Pitch, Yaw, Gripper]
+        Returns a 7D action: [dX, dY, dZ, dRoll, dPitch, dYaw, spray]
+        spray: 1.0 = spraying, -1.0 = off
         """
-        
-        # Default Action
-        # Stay still, keep gripper open (-1.0 = open, 1.0 = closed)
         action = np.zeros(7)
-        action[6] = -1.0
-        
-        # Calculate distance to target
-        error_x = target_pos[0] - ee_pos[0]
-        error_y = target_pos[1] - ee_pos[1]
-        error_z = target_pos[2] - ee_pos[2]
-        
-        # Hover (15cm above the block)
+        action[6] = -1.0  # spray off by default
+
+        hover_pos = spray_target.copy()
+        hover_pos[2] += HOVER_OFFSET_Z
+
+        err_to_hover = hover_pos - ee_pos
+        err_to_target = spray_target - ee_pos
+        self.state_steps += 1
+
+        # State 0: Approach hover point above canopy
         if self.state == 0:
-            action[0:3] = [error_x, error_y, error_z + 0.15]
-            
-            # Transition condition: If close to hover point, move to descend
-            if np.linalg.norm([error_x, error_y]) < 0.02 and abs(error_z + 0.15) < 0.02:
-                self.state = 1
-                print("[ORACLE]: Transitioning to DESCEND")
-         
-        # Descend (Drop down to block level) 
+            action[0:3] = err_to_hover
+            if np.linalg.norm(err_to_hover) < self.POSITION_THRESHOLD or self.state_steps >= self.MAX_STATE_STEPS:
+                self._advance(1, "Hover reached — DESCENDING to spray position")
+
+        # State 1: Descend to spray position
         elif self.state == 1:
-            action[0:3] = [error_x, error_y, error_z]
-            
-            # Transition condition: If we are at the block height, move to Grasp
-            if abs(error_z) < 0.01:
-                self.state = 2
-                self.wait_counter = 15 # Wait 15 simulation steps for the grasps to secure
-                print("[ORACLE]: Transitioning to GRASP")
-        
-        # Grasp (Close gripper)
+            action[0:3] = err_to_target
+            if np.linalg.norm(err_to_target) < self.POSITION_THRESHOLD or self.state_steps >= self.MAX_STATE_STEPS:
+                self.spray_counter = SPRAY_DURATION
+                self._advance(2, "At spray position — SPRAYING")
+
+        # State 2: Hold position and spray
         elif self.state == 2:
-            action[6] = 1.0 # Close Command
-            self.wait_counter -= 1
-            if self.wait_counter <= 0:
-                self.state = 3
-                print(f"[ORACLE]: Transitioning to LIFT")
-        
-        # Lift (Pull the block up)
+            action[0:3] = err_to_target  # hold position
+            action[6] = 1.0              # spray on
+            self.spray_counter -= 1
+            if self.spray_counter <= 0:
+                self._advance(3, "Spray done — RETRACTING")
+
+        # State 3: Retract back to hover height
         elif self.state == 3:
-            action[0:3] = [0.0, 0.0, 0.20] # Move Z up
-            action[6] = 1.0
-            if ee_pos[2] > (target_pos[2] + 0.15):
-                print("[ORACLE]: Done. Resetting")
-                self.state = 4 # Finish
-                
+            action[0:3] = err_to_hover
+            if np.linalg.norm(err_to_hover) < self.POSITION_THRESHOLD or self.state_steps >= self.MAX_STATE_STEPS:
+                self._advance(4, "Retracted. Done.")
+
         return action
         
 def main():
@@ -112,7 +131,7 @@ def main():
     obs, _ = env.reset()
     
     # Initialize Oracle Brain
-    oracle = PickOracle()
+    oracle = SprayOracle()
     
     print("[INFO]: Starting Oracle Data Generation Loop...")
     
@@ -125,24 +144,36 @@ def main():
     
     if "custom_env" in env.unwrapped.scene.keys():
         tree_pos, _ = env.unwrapped.scene["custom_env"].get_world_poses()
-        print(f"Tree is at: {tree_pos[0].cpu().numpy()}")
-        # Auto-detect trunk height from bounding box so we can target the midpoint
-        try:
-            aabb = env.unwrapped.scene["custom_env"].root_physx_view.get_root_transforms()
-            # Fallback: use AABB via prim bounds if available
-            import omni.usd
-            stage = omni.usd.get_context().get_stage()
-            from pxr import UsdGeom
-            prim_path = env.unwrapped.scene["custom_env"].prim_paths[0]
-            prim = stage.GetPrimAtPath(prim_path)
-            bbox_cache = UsdGeom.BBoxCache(0, ["default", "render"])
-            bbox = bbox_cache.ComputeWorldBound(prim)
-            trunk_height = bbox.GetRange().GetMax()[2] - bbox.GetRange().GetMin()[2]
-            global TRUNK_TARGET_Z_OFFSET
-            TRUNK_TARGET_Z_OFFSET = trunk_height / 2.0
-            print(f"[INFO]: Auto-detected trunk height: {trunk_height:.3f}m — targeting midpoint at +{TRUNK_TARGET_Z_OFFSET:.3f}m")
-        except Exception as e:
-            print(f"[INFO]: Could not auto-detect trunk height ({e}), using default offset {TRUNK_TARGET_Z_OFFSET}m")
+        print(f"[INFO]: Background scene root at: {tree_pos[0].cpu().numpy()}")
+
+    print(f"[INFO]: Spray target set to {SPRAY_TARGET} (test placeholder — update once canopy position is known)")
+
+    # Debug: scan USD stage for prims that look like trees/plants and print their bounds
+    try:
+        import omni.usd
+        from pxr import UsdGeom, Gf
+        stage = omni.usd.get_context().get_stage()
+        bbox_cache = UsdGeom.BBoxCache(0, ["default", "render"])
+        print("[INFO]: Scanning scene for tall prims (likely tree canopy candidates):")
+        for prim in stage.Traverse():
+            path = str(prim.GetPath())
+            # Only look at prims inside the custom_env scene, skip small/non-mesh prims
+            if "Scene" not in path:
+                continue
+            if not prim.IsA(UsdGeom.Xform) and not prim.IsA(UsdGeom.Mesh):
+                continue
+            try:
+                bbox = bbox_cache.ComputeWorldBound(prim)
+                rng = bbox.GetRange()
+                height = rng.GetMax()[2] - rng.GetMin()[2]
+                if height > 1.0:  # only prims taller than 1m
+                    center = (rng.GetMin() + rng.GetMax()) / 2
+                    top = rng.GetMax()[2]
+                    print(f"  {path} | height={height:.2f}m | center=({center[0]:.2f},{center[1]:.2f},{center[2]:.2f}) | top_z={top:.2f}")
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[INFO]: USD stage scan skipped ({e})")
     
     # Cache device and gripper index once outside the loop
     sim_device = env.unwrapped.device
@@ -156,16 +187,8 @@ def main():
         # Shape is (num_envs, num_bodies, 3). Want env 0, for gripper_idx
         ee_position = env.unwrapped.scene["robot"].data.body_pos_w[0, gripper_idx].cpu().numpy()
 
-        # Get block/trunk position using 'custom_env'
-        block_pos_w, _ = env.unwrapped.scene["custom_env"].get_world_poses()
-        block_position = block_pos_w[0].cpu().numpy()
-
-        # Target trunk midpoint, not the base (Z=0)
-        trunk_target = block_position.copy()
-        trunk_target[2] += TRUNK_TARGET_Z_OFFSET
-
-        # Ask Oracle for action vector
-        optimal_action = oracle.compute_action(ee_position, trunk_target)
+        # Ask Oracle for action vector (fixed test target for now)
+        optimal_action = oracle.compute_action(ee_position, SPRAY_TARGET)
 
         # Clamp position deltas — IK controller uses relative mode, needs small steps
         optimal_action[:3] = np.clip(optimal_action[:3], -ACTION_CLAMP, ACTION_CLAMP)
@@ -177,18 +200,18 @@ def main():
         # Heartbeat: print every 50 steps
         if step % 50 == 0:
             print(f"[STEP {step:05d}] state={oracle.state} | "
-                  f"ee={ee_position.round(3)} | block={block_position.round(3)} | "
+                  f"ee={ee_position.round(3)} | target={SPRAY_TARGET.round(3)} | "
                   f"action={action_tensor[0].cpu().numpy().round(3)} | "
                   f"tensor dtype={action_tensor.dtype} device={action_tensor.device}")
 
         env.step(action_tensor)
         step += 1
 
-        # Reset environment once the task is complete
+        # Reset environment once the spray cycle is complete
         if oracle.state == 4:
             print("[INFO]: Resetting environment for next sequence")
             env.reset()
-            oracle = PickOracle() # Reset to HOVER
+            oracle = SprayOracle()
             step = 0
             
 if __name__ == "__main__":
