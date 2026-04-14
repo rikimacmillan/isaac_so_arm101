@@ -46,9 +46,9 @@ HOVER_OFFSET_Z = 0.10  # meters — small offset since arm workspace is tight
 SPRAY_DURATION = 60  # steps (~2 seconds at 30fps)
 
 # Domain Randomization Ranges
-X_MIN, X_MAX = 0.25, 0.35 # Distance from the trunk
+X_MIN, X_MAX = 0.35, 0.45 # Distance from the trunk
 Y_MIN, Y_MAX = -0.10, 0.10 # Climber twist/side to side margin
-Z_MIN, Z_MAX = 4.50, 4.80 # Climber height margin above the crown
+Z_MIN, Z_MAX = 4.40, 4.60 # Climber height margin above the crown
 
 def get_random_target():
     """Generates a randomized spray target within the defined tolerance volume."""
@@ -221,14 +221,20 @@ def main():
         ee_position = env.unwrapped.scene["robot"].data.body_pos_w[0, gripper_idx].cpu().numpy()
 
         # Ask Oracle for action vector (fixed test target for now)
-        optimal_action = oracle.compute_action(ee_position, current_spray_target)
+        delta_action = oracle.compute_action(ee_position, current_spray_target)
 
         # Clamp position deltas — IK controller uses relative mode, needs small steps
-        optimal_action[:3] = np.clip(optimal_action[:3], -ACTION_CLAMP, ACTION_CLAMP)
+        delta_action[:3] = np.clip(delta_action[:3], -ACTION_CLAMP, ACTION_CLAMP)
+        
+        # Calculate absolute action for physics engine
+        # Current position + Delta movement = Next absolute position
+        env_action = delta_action.copy()
+        env_action[:3] = ee_position + delta_action[:3]
 
         # Build float32 tensor directly on sim device (no CPU→GPU transfer)
         # Shape: (1, 7) = (num_envs, action_dim)
-        action_tensor = torch.tensor(optimal_action, dtype=torch.float32, device=sim_device).unsqueeze(0)
+        # Build tensor based on absolute action in simulation
+        action_tensor = torch.tensor(env_action, dtype=torch.float32, device=sim_device).unsqueeze(0)
 
         # Data Recording Engine
         if oracle.state < 4:
@@ -248,7 +254,7 @@ def main():
             
             # Save visual and numeric state to disk
             cv2.imwrite(os.path.join(img_dir, f"frame_{step_str}.jpg"), img_bgr)
-            np.save(os.path.join(act_dir, f"action_{step_str}.npy"), optimal_action)
+            np.save(os.path.join(act_dir, f"action_{step_str}.npy"), delta_action)
             global_record_step += 1
         
         # Heartbeat: print every 50 steps
