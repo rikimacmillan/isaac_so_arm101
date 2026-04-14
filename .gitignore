@@ -51,3 +51,6 @@ logs/
 
 # Pre-Trained Checkpoints
 /.pretrained_checkpoints/
+
+# VLA Tree Dataset
+vla_tree_dataset/

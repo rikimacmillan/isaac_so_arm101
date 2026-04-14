@@ -189,8 +189,8 @@ class ReachVlaSceneCfg(ReachSceneCfg):
             horizontal_aperture=20.955,
             clipping_range=(0.01, 100.0),
         ),
-        width=256,
-        height=256,
+        width=244, # OpenVLA expects 244 x 244
+        height=244,
         # Apply your exact X, Y, Z position and the converted Rotation
         offset=TiledCameraCfg.OffsetCfg(
             pos=(-0.01371, 0.03346, -0.02114),

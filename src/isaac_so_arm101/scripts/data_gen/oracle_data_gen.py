@@ -153,6 +153,13 @@ def main():
     dataset_dir = "vla_tree_dataset"
     os.makedirs(dataset_dir, exist_ok=True)
     
+    img_dir = os.path.join(dataset_dir, "images")
+    act_dir = os.path.join(dataset_dir, "actions")
+    
+    os.makedirs(img_dir, exist_ok=True)
+    os.makedirs(act_dir, exist_ok=True)
+    print(f"[INFO]: Saving images to ./{img_dir}/ and actions to ./{act_dir}/")
+    
     # Initialize Oracle Brain
     oracle = SprayOracle()
     current_spray_target = get_random_target()
@@ -163,6 +170,8 @@ def main():
     # print("CUSTOM ENV DICT:", env.unwrapped.scene["custom_env"].__dict__.keys())
     # print("Current Goal/Command:", env.unwrapped.command_manager.get_command("object_pose"))
     
+    """ 
+    Debug: Find available keys 
     print("Available Command Keys: ", env.unwrapped.command_manager._terms.keys())
     print("Available Scene Keys: ", env.unwrapped.scene.keys())
     
@@ -171,7 +180,6 @@ def main():
         print(f"[INFO]: Background scene root at: {tree_pos[0].cpu().numpy()}")
 
     print(f"[INFO]: Spray target set to {SPRAY_TARGET} (test placeholder — update once canopy position is known)")
-    """
     # Debug: scan USD stage for prims that look like trees/plants and print their bounds
     try:
         import omni.usd
@@ -239,8 +247,8 @@ def main():
             step_str = str(global_record_step).zfill(5)
             
             # Save visual and numeric state to disk
-            cv2.imwrite(os.path.join(dataset_dir, f"frame_{step_str}.jpg"), img_bgr)
-            np.save(os.path.join(dataset_dir, f"action_{step_str}.npy"), optimal_action)
+            cv2.imwrite(os.path.join(img_dir, f"frame_{step_str}.jpg"), img_bgr)
+            np.save(os.path.join(act_dir, f"action_{step_str}.npy"), optimal_action)
             global_record_step += 1
         
         # Heartbeat: print every 50 steps
