@@ -45,21 +45,37 @@ HOVER_OFFSET_Z = 0.10  # meters — small offset since arm workspace is tight
 # How long to hold the spray position (in simulation steps)
 SPRAY_DURATION = 60  # steps (~2 seconds at 30fps)
 
+"""
+Note: This is hard-coded for the original tree
 # Domain Randomization Ranges
 X_MIN, X_MAX = 0.45, 0.50 # Distance from the trunk
 Y_MIN, Y_MAX = -0.08, 0.08 # Climber twist/side to side margin
 Z_MIN, Z_MAX = 4.95, 5.05 # Climber height margin above the crown
 
 def get_random_target():
-    """Generates a randomized spray target within the defined tolerance volume."""
+    # Generates a randomized spray target within the defined tolerance volume.
     return np.array([
         np.random.uniform(X_MIN, X_MAX),
         np.random.uniform(Y_MIN, Y_MAX),
         np.random.uniform(Z_MIN, Z_MAX)
     ])
+"""
+
+# Relative Offsets
+OFFSET_X_MIN, OFFSET_X_MAX = -0.12, -0.05  # Stop 5cm to 15cm in front of the tree
+OFFSET_Y_MIN, OFFSET_Y_MAX = -0.04, 0.04   # Slight left/right variation
+OFFSET_Z_MIN, OFFSET_Z_MAX = 0.15, 0.25    # Spray near the base or slightly up the trunk
+
+def get_dynamic_target(tree_pos):
+    """Generates a target relative to the tree's newly randomized location."""
+    return np.array([
+        tree_pos[0] + np.random.uniform(OFFSET_X_MIN, OFFSET_X_MAX),
+        tree_pos[1] + np.random.uniform(OFFSET_Y_MIN, OFFSET_Y_MAX),
+        tree_pos[2] + np.random.uniform(OFFSET_Z_MIN, OFFSET_Z_MAX)
+    ])
 
 """
-Non-randomized spray target value (place holder)
+Note: Non-randomized spray target value (place holder)
 # Spray target: push slightly toward palm (X=0.56) and a bit higher into the canopy
 # Arm natural hover is ~[0.5, 0.03, 5.07], so this is a small reachable adjustment
 # SPRAY_TARGET = np.array([0.52, 0.03, 5.15])
@@ -162,7 +178,17 @@ def main():
     
     # Initialize Oracle Brain
     oracle = SprayOracle()
-    current_spray_target = get_random_target()
+    
+    # Find out where the tree spawned initially
+    tree_poses, tree_quats = env.unwrapped.scene["custom_env"].get_world_poses()
+    
+    # Clone and save the default position so we don't drift endlessly over 25k steps!
+    default_tree_pos = tree_poses.clone()
+    default_tree_quats = tree_quats.clone()
+    
+    # Generate the first dynamic target
+    actual_tree_pos = default_tree_pos[0].cpu().numpy()
+    current_spray_target = get_dynamic_target(actual_tree_pos)
     
     print("[INFO]: Starting Oracle Data Generation Loop...")
     
@@ -256,6 +282,11 @@ def main():
             cv2.imwrite(os.path.join(img_dir, f"frame_{step_str}.jpg"), img_bgr)
             np.save(os.path.join(act_dir, f"action_{step_str}.npy"), delta_action)
             global_record_step += 1
+            
+            if global_record_step >= 25000:
+                print(f"[INFO]: Successfully collected {global_record_step} frames! Shutting down.")
+                simulation_app.close()
+                break
         
         # Heartbeat: print every 50 steps
         if step % 50 == 0:
@@ -267,12 +298,23 @@ def main():
         env.step(action_tensor)
         step += 1
 
-        # Reset environment once the spray cycle is complete
-        if oracle.state == 4:
-            print("[INFO]: Resetting environment for next sequence")
+       # Reset environment once the spray cycle is complete (or if it gets stuck)
+        if oracle.state == 4 or oracle.state_steps >= oracle.MAX_STATE_STEPS:
+            if oracle.state_steps >= oracle.MAX_STATE_STEPS:
+                print("[WARNING]: Target was an unreachable outlier. Resetting episode.")
+            else:
+                print("[INFO]: Success! Resetting environment for next sequence.")
+                
             env.reset()
             oracle = SprayOracle()
-            current_spray_target = get_random_target()
+            
+            # Get Randomized Tree Position
+            # Get the coordinates of the tree.
+            tree_poses, _ = env.unwrapped.scene["custom_env"].get_world_poses()
+            actual_tree_pos = tree_poses[0].cpu().numpy()
+            
+            # Calculate the new relative target
+            current_spray_target = get_dynamic_target(actual_tree_pos)
             step = 0
             
 if __name__ == "__main__":
