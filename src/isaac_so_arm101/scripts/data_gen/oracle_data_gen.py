@@ -7,7 +7,7 @@
 import argparse
 from isaaclab.app import AppLauncher
 
-# 1. BOOT SEQUENCE: Parse arguments and launch Isaac Sim first!
+# Parse arguments and launch Isaac Sim first.
 parser = argparse.ArgumentParser(description="VLA Inference for Isaac Lab.")
 parser.add_argument("--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate, default is 1.")
@@ -26,6 +26,8 @@ simulation_app = app_launcher.app
 
 
 """REST OF IMPORTS GO HERE (After Omniverse is running)"""
+import os
+import cv2
 import torch
 import numpy as np
 import gymnasium as gym
@@ -43,10 +45,25 @@ HOVER_OFFSET_Z = 0.10  # meters — small offset since arm workspace is tight
 # How long to hold the spray position (in simulation steps)
 SPRAY_DURATION = 60  # steps (~2 seconds at 30fps)
 
+# Domain Randomization Ranges
+X_MIN, X_MAX = 0.25, 0.35 # Distance from the trunk
+Y_MIN, Y_MAX = -0.10, 0.10 # Climber twist/side to side margin
+Z_MIN, Z_MAX = 4.50, 4.80 # Climber height margin above the crown
+
+def get_random_target():
+    """Generates a randomized spray target within the defined tolerance volume."""
+    return np.array([
+        np.random.uniform(X_MIN, X_MAX),
+        np.random.uniform(Y_MIN, Y_MAX),
+        np.random.uniform(Z_MIN, Z_MAX)
+    ])
+
+"""
+Non-randomized spray target value (place holder)
 # Spray target: push slightly toward palm (X=0.56) and a bit higher into the canopy
 # Arm natural hover is ~[0.5, 0.03, 5.07], so this is a small reachable adjustment
-SPRAY_TARGET = np.array([0.52, 0.03, 5.15])
-
+# SPRAY_TARGET = np.array([0.52, 0.03, 5.15])
+"""
 
 class SprayOracle:
     """
@@ -82,9 +99,11 @@ class SprayOracle:
         action = np.zeros(7)
         action[6] = -1.0  # spray off by default
 
+        # Calculate hover position directly above the randomized target
         hover_pos = spray_target.copy()
         hover_pos[2] += HOVER_OFFSET_Z
-
+    
+        # Calculate Delta Action Vectors (Relative movement for VLA)
         err_to_hover = hover_pos - ee_pos
         err_to_target = spray_target - ee_pos
         self.state_steps += 1
@@ -130,8 +149,13 @@ def main():
     # reset environment to get initial observation
     obs, _ = env.reset()
     
+    # Create dataset directory
+    dataset_dir = "vla_tree_dataset"
+    os.makedirs(dataset_dir, exist_ok=True)
+    
     # Initialize Oracle Brain
     oracle = SprayOracle()
+    current_spray_target = get_random_target()
     
     print("[INFO]: Starting Oracle Data Generation Loop...")
     
@@ -147,7 +171,7 @@ def main():
         print(f"[INFO]: Background scene root at: {tree_pos[0].cpu().numpy()}")
 
     print(f"[INFO]: Spray target set to {SPRAY_TARGET} (test placeholder — update once canopy position is known)")
-
+    """
     # Debug: scan USD stage for prims that look like trees/plants and print their bounds
     try:
         import omni.usd
@@ -174,13 +198,14 @@ def main():
                 pass
     except Exception as e:
         print(f"[INFO]: USD stage scan skipped ({e})")
-    
+    """
     # Cache device and gripper index once outside the loop
     sim_device = env.unwrapped.device
     gripper_indices, _ = env.unwrapped.scene["robot"].find_bodies("moving_gripper")
     gripper_idx = gripper_indices[0]
 
     step = 0
+    global_record_step = 0 # Counter for dataset filenames
     # Start simulation
     while simulation_app.is_running():
         # Pull the world position for the specific link
@@ -188,7 +213,7 @@ def main():
         ee_position = env.unwrapped.scene["robot"].data.body_pos_w[0, gripper_idx].cpu().numpy()
 
         # Ask Oracle for action vector (fixed test target for now)
-        optimal_action = oracle.compute_action(ee_position, SPRAY_TARGET)
+        optimal_action = oracle.compute_action(ee_position, current_spray_target)
 
         # Clamp position deltas — IK controller uses relative mode, needs small steps
         optimal_action[:3] = np.clip(optimal_action[:3], -ACTION_CLAMP, ACTION_CLAMP)
@@ -197,10 +222,31 @@ def main():
         # Shape: (1, 7) = (num_envs, action_dim)
         action_tensor = torch.tensor(optimal_action, dtype=torch.float32, device=sim_device).unsqueeze(0)
 
+        # Data Recording Engine
+        if oracle.state < 4:
+        
+            # Grab raw RGB tensor from  camera and convert to Numpy
+            img_tensor = env.unwrapped.scene["wrist_camera"].data.output["rgb"][0]
+            img_numpy = img_tensor.cpu().numpy()
+            
+            # Convert RGB to BGR for OpenCV
+            if img_numpy.shape[-1] == 4:
+                img_bgr = cv2.cvtColor(img_numpy, cv2.COLOR_RGBA2BGR)
+            else:
+                img_bgr = cv2.cvtColor(img_numpy, cv2.COLOR_RGB2BGR)
+                
+            # Format filenames (I.E. frame_00142.jpg)
+            step_str = str(global_record_step).zfill(5)
+            
+            # Save visual and numeric state to disk
+            cv2.imwrite(os.path.join(dataset_dir, f"frame_{step_str}.jpg"), img_bgr)
+            np.save(os.path.join(dataset_dir, f"action_{step_str}.npy"), optimal_action)
+            global_record_step += 1
+        
         # Heartbeat: print every 50 steps
         if step % 50 == 0:
             print(f"[STEP {step:05d}] state={oracle.state} | "
-                  f"ee={ee_position.round(3)} | target={SPRAY_TARGET.round(3)} | "
+                  f"ee={ee_position.round(3)} | target={current_spray_target.round(3)} | "
                   f"action={action_tensor[0].cpu().numpy().round(3)} | "
                   f"tensor dtype={action_tensor.dtype} device={action_tensor.device}")
 
@@ -212,6 +258,7 @@ def main():
             print("[INFO]: Resetting environment for next sequence")
             env.reset()
             oracle = SprayOracle()
+            current_spray_target = get_random_target()
             step = 0
             
 if __name__ == "__main__":
