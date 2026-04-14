@@ -46,9 +46,9 @@ HOVER_OFFSET_Z = 0.10  # meters — small offset since arm workspace is tight
 SPRAY_DURATION = 60  # steps (~2 seconds at 30fps)
 
 # Domain Randomization Ranges
-X_MIN, X_MAX = 0.35, 0.45 # Distance from the trunk
-Y_MIN, Y_MAX = -0.10, 0.10 # Climber twist/side to side margin
-Z_MIN, Z_MAX = 4.40, 4.60 # Climber height margin above the crown
+X_MIN, X_MAX = 0.45, 0.50 # Distance from the trunk
+Y_MIN, Y_MAX = -0.08, 0.08 # Climber twist/side to side margin
+Z_MIN, Z_MAX = 4.95, 5.05 # Climber height margin above the crown
 
 def get_random_target():
     """Generates a randomized spray target within the defined tolerance volume."""
