@@ -29,6 +29,7 @@ simulation_app = app_launcher.app
 import os
 import cv2
 import torch
+import math
 import numpy as np
 import gymnasium as gym
 from PIL import Image
@@ -61,6 +62,34 @@ def get_random_target():
     ])
 """
 
+def get_tree_trunk_position(env):
+    """Find the Palm prim and compute a position on the trunk dynamically."""
+    import omni.usd
+    from pxr import UsdGeom
+    
+    stage = omni.usd.get_context().get_stage()
+    bbox_cache = UsdGeom.BBoxCache(0, ["default", "render"])
+    
+    # Find the Palm prim inside the scene
+    for prim in stage.Traverse():
+        path = str(prim.GetPath())
+        if "Palm" in path and prim.IsA(UsdGeom.Xform):
+            bbox = bbox_cache.ComputeWorldBound(prim)
+            rng = bbox.GetRange()
+            center = (rng.GetMin() + rng.GetMax()) / 2
+            trunk_height = rng.GetMax()[2] - rng.GetMin()[2]
+        
+            z = rng.GetMin()[2] + trunk_height * 0.75
+            
+            pos = np.array([float(center[0]), float(center[1]), float(z)])
+            print(f"[INFO]: Palm bbox height={trunk_height:.2f}m, placing robot at z={z:.2f}")
+            return pos
+    
+    # Fallback to scene root
+    print("[WARNING]: Palm prim not found, falling back to scene root")
+    tree_poses, _ = env.unwrapped.scene["custom_env"].get_world_poses()
+    return tree_poses[0].cpu().numpy()
+
 # Relative Offsets
 OFFSET_X_MIN, OFFSET_X_MAX = -0.12, -0.05  # Stop 5cm to 15cm in front of the tree
 OFFSET_Y_MIN, OFFSET_Y_MAX = -0.04, 0.04   # Slight left/right variation
@@ -73,6 +102,33 @@ def get_dynamic_target(tree_pos):
         tree_pos[1] + np.random.uniform(OFFSET_Y_MIN, OFFSET_Y_MAX),
         tree_pos[2] + np.random.uniform(OFFSET_Z_MIN, OFFSET_Z_MAX)
     ])
+    
+# How far from the trunk center the robot base should sit
+ROBOT_STANDOFF = 0.40  # meters — adjust so base clears the bark
+
+def reposition_robot(env, trunk_pos):
+    """Teleport robot base near trunk, facing toward it."""
+    robot = env.unwrapped.scene["robot"]
+    
+    robot_pos = trunk_pos.copy()
+    robot_pos[0] += ROBOT_STANDOFF
+    
+    # Compute yaw angle FROM robot TO trunk center
+    dx = trunk_pos[0] - robot_pos[0]
+    dy = trunk_pos[1] - robot_pos[1]
+    yaw = math.atan2(dy, dx)
+    
+    # Convert yaw to quaternion (rotation around Z axis)
+    # (w, x, y, z)
+    quat = [math.cos(yaw / 2), 0.0, 0.0, math.sin(yaw / 2)]
+    
+    print(f"[REPOSITION] trunk={trunk_pos.round(3)} | robot={robot_pos.round(3)} | yaw={math.degrees(yaw):.1f}° | quat={[round(q,3) for q in quat]}")
+
+    
+    pos_tensor = torch.tensor(robot_pos, dtype=torch.float32, device=env.unwrapped.device).unsqueeze(0)
+    quat_tensor = torch.tensor([quat], dtype=torch.float32, device=env.unwrapped.device)
+    
+    robot.write_root_pose_to_sim(torch.cat([pos_tensor, quat_tensor], dim=-1))
 
 """
 Note: Non-randomized spray target value (place holder)
@@ -181,14 +237,10 @@ def main():
     
     # Find out where the tree spawned initially
     tree_poses, tree_quats = env.unwrapped.scene["custom_env"].get_world_poses()
-    
-    # Clone and save the default position so we don't drift endlessly over 25k steps!
-    default_tree_pos = tree_poses.clone()
-    default_tree_quats = tree_quats.clone()
-    
-    # Generate the first dynamic target
-    actual_tree_pos = default_tree_pos[0].cpu().numpy()
-    current_spray_target = get_dynamic_target(actual_tree_pos)
+      
+    trunk_pos = get_tree_trunk_position(env)
+    reposition_robot(env, trunk_pos)
+    current_spray_target = get_dynamic_target(trunk_pos)
     
     print("[INFO]: Starting Oracle Data Generation Loop...")
     
@@ -311,10 +363,11 @@ def main():
             # Get Randomized Tree Position
             # Get the coordinates of the tree.
             tree_poses, _ = env.unwrapped.scene["custom_env"].get_world_poses()
-            actual_tree_pos = tree_poses[0].cpu().numpy()
+            trunk_pos = get_tree_trunk_position(env)
+            reposition_robot(env, trunk_pos)
             
             # Calculate the new relative target
-            current_spray_target = get_dynamic_target(actual_tree_pos)
+            current_spray_target = get_dynamic_target(trunk_pos)  # targets relative to trunk, not ground
             step = 0
             
 if __name__ == "__main__":
