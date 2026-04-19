@@ -55,8 +55,65 @@ uv run play --task Isaac-PING-TI-Reach-Play-v0
 
 Test with VLA model.
 
+Added utilities for OpenVLA + LoRA workflow:
+- `vla_inference`: supports `--lora_path` to apply a PEFT/LoRA adapter on top of the base model.
+- `vla_record_dataset.py`: records a simple JSONL dataset (image + instruction + action) from simulation.
+- `vla_lora_finetune`: offline LoRA fine-tuning on the recorded JSONL dataset (also load images).
+- `data/`: local dataset storage (e.g. `data/vla_train/`); dataset contents are gitignored by default.
+
 ```bash
 uv run vla_inference --task Isaac-PING-TI-VLA-v0 --num_envs 1 --enable_cameras
+```
+
+Use a LoRA adapter (PEFT) on top of the base model.
+
+```bash
+uv run vla_inference --task Isaac-PING-TI-VLA-v0 --num_envs 1 --enable_cameras --lora_path /path/to/adapter_dir
+```
+
+Record a simple JSONL dataset (images + instruction + action) for LoRA fine-tuning.
+
+> Note: recording requires Isaac Sim rendering/cameras. If you are in WSL2 and Vulkan/graphics is not working,
+> record on a native Linux machine and copy the dataset back for offline training.
+
+```bash
+python src/isaac_so_arm101/scripts/vla/vla_record_dataset.py \
+   --task Isaac-PING-TI-VLA-v0 \
+   --num_envs 1 \
+   --num_steps 2000 \
+   --instruction "reach the target" \
+   --policy random \
+   --out_dir data/vla_train \
+   --headless
+```
+
+This writes:
+- `data/vla_train/dataset.jsonl`
+- `data/vla_train/images/frame_*.png`
+
+Use `--append` to keep adding more samples to an existing `dataset.jsonl`.
+
+Fine-tune a LoRA adapter (PEFT) on a simple JSONL dataset.
+
+```bash
+uv run vla_lora_finetune \
+   --data_jsonl /path/to/dataset.jsonl \
+   --image_root /path/to/images \
+   --output_dir /path/to/adapter_dir \
+   --max_steps 1000 \
+   --batch_size 1 \
+   --grad_accum_steps 16 \
+   --use_4bit
+```
+
+Run inference with the fine-tuned adapter.
+
+```bash
+uv run vla_inference \
+   --task Isaac-PING-TI-VLA-v0 \
+   --num_envs 1 \
+   --enable_cameras \
+   --lora_path /path/to/adapter_dir
 ```
 
 Train a RL-based IK policy.

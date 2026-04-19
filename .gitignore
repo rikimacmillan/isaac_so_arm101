@@ -1,6 +1,9 @@
 # Virtual environments
 .venv
 
+# Hugging Face cache (optional, if you store it inside the repo)
+.hf_cache/
+
 # C++
 **/cmake-build*/
 **/build*/
@@ -51,3 +54,10 @@ logs/
 
 # Pre-Trained Checkpoints
 /.pretrained_checkpoints/
+
+# Recorded VLA datasets
+data/vla_train/*
+!data/vla_train/.gitkeep
+!data/vla_train/images/
+data/vla_train/images/*
+!data/vla_train/images/.gitkeep

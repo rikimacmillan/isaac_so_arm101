@@ -12,6 +12,9 @@ parser = argparse.ArgumentParser(description="VLA Inference for Isaac Lab.")
 parser.add_argument("--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate, default is 1.")
 parser.add_argument("--task", type=str, default="None", help="Name of the task.")
+
+# Optional LoRA adapter (PEFT)
+parser.add_argument("--lora_path", type=str, default=None, help="Optional path (or HF repo id) to a PEFT/LoRA adapter directory to apply on top of the base OpenVLA model.",)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -52,7 +55,18 @@ def main():
         trust_remote_code=True,
         device_map={"": 0},
     )
-    
+
+    # Apply LoRA adapter if provided.
+    if args_cli.lora_path:
+        print(f"[INFO]: Loading LoRA adapter: {args_cli.lora_path}")
+        try:
+            from peft import PeftModel
+        except ImportError as exc:
+            raise ImportError(
+                "LoRA requested but 'peft' is not installed. Install it with: pip install peft"
+            ) from exc
+        vla = PeftModel.from_pretrained(vla, args_cli.lora_path, is_trainable=False)
+
     # vla = AutoModelForVision2Seq.from_pretrained(
     #     model_id, 
     #     torch_dtype=torch.bfloat16, 
