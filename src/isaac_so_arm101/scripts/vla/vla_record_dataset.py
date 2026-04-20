@@ -21,7 +21,8 @@ Each JSONL line contains:
 Important:
   - This script does *not* magically create good demonstrations.
     You must choose a policy that produces meaningful actions.
-    The built-in `random`/`zero` policies are only for pipeline smoke-tests.
+        The built-in `random`/`zero` policies are only for pipeline smoke-tests.
+        The `openvla` policy records actions predicted by OpenVLA (optionally + LoRA).
 
 Run (inside the Isaac Sim container):
   python src/isaac_so_arm101/scripts/vla/vla_record_dataset.py \
@@ -42,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import time
 from pathlib import Path
 
@@ -67,9 +69,35 @@ parser.add_argument(
 )
 parser.add_argument(
     "--policy",
-    choices=["random", "zero"],
+    choices=["random", "zero", "openvla"],
     default="random",
-    help="Action source. NOTE: random/zero are only useful for smoke-testing.",
+    help="Action source. NOTE: random/zero are only useful for smoke-testing; openvla queries a model.",
+)
+
+# OpenVLA policy options (only used when --policy openvla)
+parser.add_argument(
+    "--openvla_model_id",
+    type=str,
+    default="openvla/openvla-7b",
+    help="HuggingFace model id (or local path) for OpenVLA base model.",
+)
+parser.add_argument(
+    "--openvla_lora_path",
+    type=str,
+    default=None,
+    help="Optional PEFT/LoRA adapter directory (or HF repo id) to apply on top of the base model.",
+)
+parser.add_argument(
+    "--openvla_unnorm_key",
+    type=str,
+    default="bridge_orig",
+    help="Un-normalization key passed to OpenVLA predict_action (depends on how the model was trained).",
+)
+parser.add_argument(
+    "--openvla_prompt",
+    type=str,
+    default=None,
+    help="Optional prompt template to send to OpenVLA. If omitted, uses 'In: {instruction}\\nOut:'.",
 )
 
 parser.add_argument(
@@ -147,6 +175,14 @@ import isaac_so_arm101.tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 
 
+_STOP_REQUESTED = False
+
+
+def _request_stop(_signum: int, _frame) -> None:
+    global _STOP_REQUESTED
+    _STOP_REQUESTED = True
+
+
 def _make_action(policy: str, action_shape: tuple[int, ...], device: torch.device) -> torch.Tensor:
     if policy == "zero":
         return torch.zeros(action_shape, device=device)
@@ -155,7 +191,73 @@ def _make_action(policy: str, action_shape: tuple[int, ...], device: torch.devic
     raise ValueError(f"Unsupported policy: {policy}")
 
 
+def _patch_transformers_attention_dispatch() -> None:
+    """Patch transformers attention dispatch checks for container compatibility.
+
+    Some Isaac Sim container builds ship with a Torch/Transformers combo where
+    model init attempts to read `self._supports_sdpa` but the attribute is not
+    present on the base class. That causes an AttributeError when loading
+    OpenVLA with `trust_remote_code=True`.
+    """
+
+    try:
+        from transformers.modeling_utils import PreTrainedModel
+    except Exception:
+        return
+
+    for attr in ("_supports_sdpa", "_supports_flash_attn_2", "_supports_flex_attn"):
+        if not hasattr(PreTrainedModel, attr):
+            setattr(PreTrainedModel, attr, False)
+
+    def _sdpa_can_dispatch(self, is_init_check: bool = False) -> bool:  # noqa: ARG001
+        return False
+
+    PreTrainedModel._sdpa_can_dispatch = _sdpa_can_dispatch  # type: ignore[assignment]
+
+
+def _load_openvla(model_id: str, lora_path: str | None):
+    """Load OpenVLA + processor (optionally apply LoRA)."""
+
+    _patch_transformers_attention_dispatch()
+    from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
+
+    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    quant_config = BitsAndBytesConfig(load_in_8bit=True)
+
+    try:
+        vla = AutoModelForVision2Seq.from_pretrained(
+            model_id,
+            attn_implementation="eager",
+            torch_dtype=torch.bfloat16,
+            quantization_config=quant_config,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+            device_map={"": 0},
+        )
+    except TypeError:
+        vla = AutoModelForVision2Seq.from_pretrained(
+            model_id,
+            torch_dtype=torch.bfloat16,
+            quantization_config=quant_config,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+            device_map={"": 0},
+        )
+
+    if lora_path:
+        from peft import PeftModel
+
+        vla = PeftModel.from_pretrained(vla, lora_path, is_trainable=False)
+
+    return processor, vla
+
+
 def main() -> None:
+    # Make Ctrl+C stop recording gracefully.
+    # (Signals are process-wide; safe to register once per invocation.)
+    signal.signal(signal.SIGINT, _request_stop)
+    signal.signal(signal.SIGTERM, _request_stop)
+
     out_dir = Path(args_cli.out_dir)
     image_dir = out_dir / "images"
     jsonl_path = out_dir / "dataset.jsonl"
@@ -181,84 +283,135 @@ def main() -> None:
     )
     env = gym.make(args_cli.task, cfg=env_cfg)
 
-    if "wrist_camera" not in env.unwrapped.scene:
+    # NOTE: `InteractiveScene` does not implement Python container membership semantics,
+    # so `'wrist_camera' in scene` may call `scene[0]` and raise a confusing KeyError.
+    try:
+        _ = env.unwrapped.scene["wrist_camera"]
+    except KeyError as exc:
         raise KeyError(
             "This task does not define a 'wrist_camera' in env.unwrapped.scene. "
             "Use a VLA-enabled task config (e.g. ReachVlaEnvCfg) or add a camera to the scene."
-        )
+        ) from exc
 
-    print(f"[INFO] Recording dataset -> {out_dir}")
-    print(f"[INFO] JSONL: {jsonl_path} (mode={mode})")
-    print(f"[INFO] Images: {image_dir}")
-    print(f"[INFO] Task: {args_cli.task}  num_envs={args_cli.num_envs}")
-    print(f"[INFO] Policy: {args_cli.policy}")
+    try:
+        print(f"[INFO] Recording dataset -> {out_dir}")
+        print(f"[INFO] JSONL: {jsonl_path} (mode={mode})")
+        print(f"[INFO] Images: {image_dir}")
+        print(f"[INFO] Task: {args_cli.task}  num_envs={args_cli.num_envs}")
+        print(f"[INFO] Policy: {args_cli.policy}")
+        print("[INFO] Stop early: press Ctrl+C once; if hung, `docker stop isaac_sim` from host.")
 
-    env.reset()
+        env.reset()
 
-    # Use env's action_space shape; for vectorized envs this is usually (num_envs, action_dim).
-    action_shape = env.action_space.shape
-    device = env.unwrapped.device
+        # Use env's action_space shape; for vectorized envs this is usually (num_envs, action_dim).
+        action_shape = env.action_space.shape
+        device = env.unwrapped.device
 
-    # Frame counter should not collide when appending.
-    frame_idx = int(time.time() * 1000)  # ms timestamp base
+        # Load OpenVLA if requested.
+        openvla = None
+        openvla_prompt = None
+        if args_cli.policy == "openvla":
+            if int(args_cli.num_envs) != 1:
+                raise ValueError("--policy openvla currently requires --num_envs 1 (one camera image -> one action).")
+            print(f"[INFO] Loading OpenVLA policy model: {args_cli.openvla_model_id}")
+            if args_cli.openvla_lora_path:
+                print(f"[INFO] Applying OpenVLA LoRA adapter: {args_cli.openvla_lora_path}")
+            openvla = _load_openvla(args_cli.openvla_model_id, args_cli.openvla_lora_path)
+            if args_cli.openvla_prompt:
+                openvla_prompt = args_cli.openvla_prompt
+            else:
+                openvla_prompt = f"In: {args_cli.instruction}\nOut:"
 
-    with jsonl_path.open(mode, encoding="utf-8") as f:
-        for step in range(int(args_cli.num_steps)):
-            if not simulation_app.is_running():
-                break
+        # Frame counter should not collide when appending.
+        frame_idx = int(time.time() * 1000)  # ms timestamp base
 
-            with torch.inference_mode():
-                actions = _make_action(args_cli.policy, action_shape=action_shape, device=device)
+        with jsonl_path.open(mode, encoding="utf-8") as f:
+            for step in range(int(args_cli.num_steps)):
+                if _STOP_REQUESTED:
+                    print("[INFO] Stop requested; shutting down...")
+                    break
+                if not simulation_app.is_running():
+                    break
 
-                # Grab wrist camera RGB for env 0.
-                raw = env.unwrapped.scene["wrist_camera"].data.output["rgb"][0]
-                rgb = raw.detach().cpu().numpy()
-                if rgb.shape[-1] == 4:
-                    rgb = rgb[:, :, :3]
+                with torch.inference_mode():
+                    # Grab wrist camera RGB for env 0.
+                    raw = env.unwrapped.scene["wrist_camera"].data.output["rgb"][0]
+                    rgb = raw.detach().cpu().numpy()
+                    if rgb.shape[-1] == 4:
+                        rgb = rgb[:, :, :3]
 
-                # Convert to PIL and save.
-                rgb_u8 = rgb
-                if rgb_u8.dtype != np.uint8:
-                    rgb_max = float(np.max(rgb_u8)) if rgb_u8.size else 0.0
-                    if rgb_max <= 1.0:
-                        rgb_u8 = (np.clip(rgb_u8, 0.0, 1.0) * 255.0).astype(np.uint8)
+                    # Convert to PIL and save.
+                    rgb_u8 = rgb
+                    if rgb_u8.dtype != np.uint8:
+                        rgb_max = float(np.max(rgb_u8)) if rgb_u8.size else 0.0
+                        if rgb_max <= 1.0:
+                            rgb_u8 = (np.clip(rgb_u8, 0.0, 1.0) * 255.0).astype(np.uint8)
+                        else:
+                            rgb_u8 = np.clip(rgb_u8, 0.0, 255.0).astype(np.uint8)
+
+                    img = Image.fromarray(rgb_u8, mode="RGB")
+                    rel_name = f"frame_{frame_idx:012d}.png"
+                    img_path = image_dir / rel_name
+                    img.save(img_path)
+
+                    # Build the action.
+                    if args_cli.policy in ("random", "zero"):
+                        actions = _make_action(args_cli.policy, action_shape=action_shape, device=device)
+                    elif args_cli.policy == "openvla":
+                        assert openvla is not None
+                        assert openvla_prompt is not None
+                        processor, vla = openvla
+
+                        inputs = processor(openvla_prompt, img).to("cuda:0", dtype=torch.bfloat16)
+                        vla_action = vla.predict_action(
+                            **inputs, unnorm_key=args_cli.openvla_unnorm_key, do_sample=False
+                        )
+
+                        # Ensure float tensor in expected shape/range.
+                        a = torch.as_tensor(vla_action, dtype=torch.float32, device=device)
+                        if a.numel() != action_shape[-1]:
+                            raise ValueError(
+                                f"OpenVLA produced action with {a.numel()} dims, but env expects action_dim={action_shape[-1]}."
+                            )
+                        a = torch.clamp(a, -1.0, 1.0)
+                        actions = a.unsqueeze(0) if len(action_shape) == 2 else a
                     else:
-                        rgb_u8 = np.clip(rgb_u8, 0.0, 255.0).astype(np.uint8)
+                        raise ValueError(f"Unsupported policy: {args_cli.policy}")
 
-                img = Image.fromarray(rgb_u8, mode="RGB")
-                rel_name = f"frame_{frame_idx:012d}.png"
-                img_path = image_dir / rel_name
-                img.save(img_path)
+                    # Record the action for env 0.
+                    if actions.ndim == 1:
+                        a0 = actions.detach().cpu().to(torch.float32).tolist()
+                    else:
+                        a0 = actions[0].detach().cpu().to(torch.float32).tolist()
 
-                # Record the action for env 0.
-                if actions.ndim == 1:
-                    a0 = actions.detach().cpu().to(torch.float32).tolist()
-                else:
-                    a0 = actions[0].detach().cpu().to(torch.float32).tolist()
-
-                f.write(
-                    json.dumps(
-                        {
-                            "image": rel_name,
-                            "instruction": args_cli.instruction,
-                            "action": a0,
-                        }
+                    f.write(
+                        json.dumps(
+                            {
+                                "image": rel_name,
+                                "instruction": args_cli.instruction,
+                                "action": a0,
+                            }
+                        )
+                        + "\n"
                     )
-                    + "\n"
-                )
 
-                # Step simulation.
-                env.step(actions)
+                    # Step simulation.
+                    env.step(actions)
 
-                if step % 100 == 0:
-                    print(f"[REC] step={step} wrote={rel_name}")
+                    if step % 100 == 0:
+                        print(f"[REC] step={step} wrote={rel_name}")
 
-                frame_idx += 1
-
-    env.close()
-    print(f"[INFO] Done. Wrote dataset at: {jsonl_path}")
+                    frame_idx += 1
+    finally:
+        env.close()
+        print(f"[INFO] Done. Wrote dataset at: {jsonl_path}")
 
 
 if __name__ == "__main__":
-    main()
-    simulation_app.close()
+    try:
+        main()
+    except KeyboardInterrupt:
+        # Fallback: some environments still raise KeyboardInterrupt instead of delivering SIGINT.
+        print("[INFO] KeyboardInterrupt; shutting down...")
+    finally:
+        simulation_app.close()
